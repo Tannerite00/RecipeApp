@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trash2, ChevronDown } from 'lucide-react';
+import { Trash2, ChevronDown, Plus } from 'lucide-react';
 import { supabase, type MealPlan, type Recipe } from '../lib/supabase';
 import { getWeekDates } from '../lib/utils';
 
@@ -48,45 +48,59 @@ export function MealPlanPage() {
   const [mealPlans, setMealPlans] = useState<MealPlanWithItems[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [openDropdownDay, setOpenDropdownDay] = useState<number | null>(null);
 
   useEffect(() => {
     initializeMealPlans();
+    fetchRecipes();
   }, []);
+
+  async function fetchRecipes() {
+    try {
+      const { data, error } = await supabase
+        .from('recipes')
+        .select('*')
+        .order('title');
+
+      if (error) throw error;
+      setRecipes(data || []);
+    } catch (err) {
+      console.error('Error fetching recipes:', err);
+    }
+  }
 
   async function initializeMealPlans() {
     try {
       const userId = getOrCreateUserId();
-      const mondays = generateWeeklyMondays();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-      const { data: existingPlans, error: fetchError } = await supabase
+      const dayOfWeek = today.getDay();
+      const diffToMonday = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+      const currentMonday = new Date(today.setDate(diffToMonday));
+
+      const { data: existingPlan, error: fetchError } = await supabase
         .from('meal_plans')
-        .select('week_start_date')
-        .eq('user_id', userId);
+        .select('*')
+        .eq('user_id', userId)
+        .eq('week_start_date', currentMonday.toISOString().split('T')[0])
+        .maybeSingle();
 
       if (fetchError) {
-        console.error('Error fetching existing plans:', fetchError);
+        console.error('Error fetching existing plan:', fetchError);
         setLoading(false);
         return;
       }
 
-      const existingDates = new Set(
-        (existingPlans || []).map(p => new Date(p.week_start_date).toDateString())
-      );
-
-      const missingMondays = mondays.filter(
-        m => !existingDates.has(m.toDateString())
-      );
-
-      if (missingMondays.length > 0) {
-        const { error: insertError } = await supabase.from('meal_plans').insert(
-          missingMondays.map(monday => ({
-            week_start_date: monday.toISOString().split('T')[0],
-            user_id: userId
-          }))
-        );
+      if (!existingPlan) {
+        const { error: insertError } = await supabase.from('meal_plans').insert({
+          week_start_date: currentMonday.toISOString().split('T')[0],
+          user_id: userId
+        });
 
         if (insertError) {
-          console.error('Error inserting meal plans:', insertError);
+          console.error('Error inserting meal plan:', insertError);
         }
       }
 
@@ -131,6 +145,24 @@ export function MealPlanPage() {
       }
     } catch (err) {
       console.error('Error fetching meal plans:', err);
+    }
+  }
+
+  async function addRecipeToDay(mealPlanId: string, recipeId: string, dayOfWeek: number) {
+    try {
+      const { error } = await supabase
+        .from('meal_plan_items')
+        .insert({
+          meal_plan_id: mealPlanId,
+          recipe_id: recipeId,
+          day_of_week: dayOfWeek
+        });
+
+      if (error) throw error;
+      setOpenDropdownDay(null);
+      await fetchMealPlans();
+    } catch (err) {
+      console.error('Error adding recipe to day:', err);
     }
   }
 
@@ -209,40 +241,68 @@ export function MealPlanPage() {
                         </span>
                       </div>
 
-                      {selectedPlan.items[idx]?.recipes.length > 0 ? (
-                        <div className="space-y-2">
-                          {selectedPlan.items[idx]?.recipes.map((recipe) => (
-                            <div key={recipe.id} className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg flex justify-between items-start gap-3 border border-blue-100">
-                              <div className="flex-1">
-                                <p className="text-sm font-medium text-gray-900">{recipe.title}</p>
-                              </div>
-                              <button
-                                onClick={async () => {
-                                  const { data: items } = await supabase
-                                    .from('meal_plan_items')
-                                    .select('id')
-                                    .eq('meal_plan_id', selectedPlan.id)
-                                    .eq('recipe_id', recipe.id)
-                                    .eq('day_of_week', idx)
-                                    .maybeSingle();
-                                  if (items?.id) {
-                                    await supabase
+                      <div className="space-y-2">
+                        {selectedPlan.items[idx]?.recipes.length > 0 && (
+                          <>
+                            {selectedPlan.items[idx]?.recipes.map((recipe) => (
+                              <div key={recipe.id} className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg flex justify-between items-start gap-3 border border-blue-100">
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-gray-900">{recipe.title}</p>
+                                </div>
+                                <button
+                                  onClick={async () => {
+                                    const { data: items } = await supabase
                                       .from('meal_plan_items')
-                                      .delete()
-                                      .eq('id', items.id);
-                                    await fetchMealPlans();
-                                  }
-                                }}
-                                className="text-red-500 hover:text-red-700 flex-shrink-0"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                                      .select('id')
+                                      .eq('meal_plan_id', selectedPlan.id)
+                                      .eq('recipe_id', recipe.id)
+                                      .eq('day_of_week', idx)
+                                      .maybeSingle();
+                                    if (items?.id) {
+                                      await supabase
+                                        .from('meal_plan_items')
+                                        .delete()
+                                        .eq('id', items.id);
+                                      await fetchMealPlans();
+                                    }
+                                  }}
+                                  className="text-red-500 hover:text-red-700 flex-shrink-0"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </>
+                        )}
+
+                        <div className="relative">
+                          <button
+                            onClick={() => setOpenDropdownDay(openDropdownDay === idx ? null : idx)}
+                            className="w-full text-sm text-blue-600 hover:text-blue-700 font-medium py-2 px-3 rounded-lg border border-dashed border-blue-300 hover:border-blue-400 transition flex items-center justify-center gap-2"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Add Recipe
+                          </button>
+
+                          {openDropdownDay === idx && (
+                            <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-64 overflow-y-auto">
+                              {recipes.length === 0 ? (
+                                <div className="p-3 text-sm text-gray-500">No recipes available</div>
+                              ) : (
+                                recipes.map((recipe) => (
+                                  <button
+                                    key={recipe.id}
+                                    onClick={() => addRecipeToDay(selectedPlan.id, recipe.id, idx)}
+                                    className="w-full text-left px-4 py-2 hover:bg-blue-50 text-sm text-gray-900 transition border-b border-gray-100 last:border-0"
+                                  >
+                                    {recipe.title}
+                                  </button>
+                                ))
+                              )}
                             </div>
-                          ))}
+                          )}
                         </div>
-                      ) : (
-                        <p className="text-sm text-gray-500 italic">No recipes planned</p>
-                      )}
+                      </div>
                     </div>
                   ))}
                 </div>
