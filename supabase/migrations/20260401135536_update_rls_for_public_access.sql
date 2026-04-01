@@ -43,3 +43,8 @@ CREATE POLICY "Meal plan items are publicly deletable"
 CREATE POLICY "Meal plan items are publicly updatable"
   ON meal_plan_items FOR UPDATE
   USING (true);
+
+ALTER TABLE meal_plans 
+ALTER COLUMN user_id DROP NOT NULL;
+
+ALTER TABLE meal_plans DROP COLUMN user_id;
