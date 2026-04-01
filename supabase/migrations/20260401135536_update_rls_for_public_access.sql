@@ -39,3 +39,7 @@ CREATE POLICY "Meal plan items are publicly insertable"
 CREATE POLICY "Meal plan items are publicly deletable"
   ON meal_plan_items FOR DELETE
   USING (true);
+
+CREATE POLICY "Meal plan items are publicly updatable"
+  ON meal_plan_items FOR UPDATE
+  USING (true);
