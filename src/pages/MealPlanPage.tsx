@@ -12,16 +12,6 @@ interface MealPlanWithItems extends MealPlan {
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-function getOrCreateUserId(): string {
-  const key = 'recipehub_user_id';
-  let userId = localStorage.getItem(key);
-  if (!userId) {
-    userId = crypto.randomUUID();
-    localStorage.setItem(key, userId);
-  }
-  return userId;
-}
-
 function getFirstMondayOf2026() {
   const date = new Date(2026, 0, 1);
   const day = date.getDay();
@@ -72,7 +62,6 @@ export function MealPlanPage() {
 
   async function initializeMealPlans() {
     try {
-      const userId = getOrCreateUserId();
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
@@ -83,7 +72,6 @@ export function MealPlanPage() {
       const { data: existingPlan, error: fetchError } = await supabase
         .from('meal_plans')
         .select('*')
-        .eq('user_id', userId)
         .eq('week_start_date', currentMonday.toISOString().split('T')[0])
         .maybeSingle();
 
@@ -96,7 +84,6 @@ export function MealPlanPage() {
       if (!existingPlan) {
         const { error: insertError } = await supabase.from('meal_plans').insert({
           week_start_date: currentMonday.toISOString().split('T')[0],
-          user_id: userId
         });
 
         if (insertError) {
@@ -114,11 +101,9 @@ export function MealPlanPage() {
 
   async function fetchMealPlans() {
     try {
-      const userId = getOrCreateUserId();
       const { data, error } = await supabase
         .from('meal_plans')
         .select('*')
-        .eq('user_id', userId)
         .order('week_start_date', { ascending: false });
 
       if (error) throw error;
