@@ -12,6 +12,16 @@ interface MealPlanWithItems extends MealPlan {
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+function getOrCreateUserId(): string {
+  const key = 'recipehub_user_id';
+  let userId = localStorage.getItem(key);
+  if (!userId) {
+    userId = crypto.randomUUID();
+    localStorage.setItem(key, userId);
+  }
+  return userId;
+}
+
 function getFirstMondayOf2026() {
   const date = new Date(2026, 0, 1);
   const day = date.getDay();
@@ -45,13 +55,7 @@ export function MealPlanPage() {
 
   async function initializeMealPlans() {
     try {
-      const { data, error: userError } = await supabase.auth.getUser();
-      if (userError || !data?.user?.id) {
-        setLoading(false);
-        return;
-      }
-
-      const userId = data.user.id;
+      const userId = getOrCreateUserId();
       const mondays = generateWeeklyMondays();
 
       const { data: existingPlans, error: fetchError } = await supabase
@@ -96,9 +100,11 @@ export function MealPlanPage() {
 
   async function fetchMealPlans() {
     try {
+      const userId = getOrCreateUserId();
       const { data, error } = await supabase
         .from('meal_plans')
         .select('*')
+        .eq('user_id', userId)
         .order('week_start_date', { ascending: false });
 
       if (error) throw error;

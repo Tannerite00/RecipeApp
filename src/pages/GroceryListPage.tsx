@@ -7,6 +7,16 @@ interface Ingredient {
   count: number;
 }
 
+function getOrCreateUserId(): string {
+  const key = 'recipehub_user_id';
+  let userId = localStorage.getItem(key);
+  if (!userId) {
+    userId = crypto.randomUUID();
+    localStorage.setItem(key, userId);
+  }
+  return userId;
+}
+
 export function GroceryListPage() {
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [selectedMealPlan, setSelectedMealPlan] = useState('');
@@ -20,9 +30,11 @@ export function GroceryListPage() {
 
   async function fetchMealPlans() {
     try {
+      const userId = getOrCreateUserId();
       const { data, error } = await supabase
         .from('meal_plans')
         .select('*')
+        .eq('user_id', userId)
         .order('week_start_date', { ascending: false });
 
       if (error) throw error;
