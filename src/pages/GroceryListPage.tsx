@@ -7,45 +7,41 @@ interface Ingredient {
   count: number;
 }
 
-function getOrCreateUserId(): string {
-  const key = 'recipehub_user_id';
-  let userId = localStorage.getItem(key);
-  if (!userId) {
-    userId = crypto.randomUUID();
-    localStorage.setItem(key, userId);
-  }
-  return userId;
-}
-
 export function GroceryListPage() {
-  const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
-  const [selectedMealPlan, setSelectedMealPlan] = useState('');
+  const [mealPlan, setMealPlan] = useState<MealPlan | null>(null);
   const [groceryItems, setGroceryItems] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    fetchMealPlans();
+    fetchMealPlan();
   }, []);
 
-  async function fetchMealPlans() {
+  async function fetchMealPlan() {
     try {
-      const userId = getOrCreateUserId();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const dayOfWeek = today.getDay();
+      const diffToMonday = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+      const currentMonday = new Date(today.setDate(diffToMonday));
+      const weekStartDate = currentMonday.toISOString().split('T')[0];
+
       const { data, error } = await supabase
         .from('meal_plans')
         .select('*')
-        .eq('user_id', userId)
-        .order('week_start_date', { ascending: false });
+        .eq('week_start_date', weekStartDate)
+        .maybeSingle();
 
       if (error) throw error;
-      setMealPlans(data || []);
-      if (data && data.length > 0) {
-        setSelectedMealPlan(data[0].id);
-        fetchGroceryList(data[0].id);
+
+      if (data) {
+        setMealPlan(data);
+        await fetchGroceryList(data.id);
       }
+
+      setLoading(false);
     } catch (err) {
-      console.error('Error fetching meal plans:', err);
-    } finally {
+      console.error('Error fetching meal plan:', err);
       setLoading(false);
     }
   }
@@ -73,11 +69,6 @@ export function GroceryListPage() {
     }
   }
 
-  const handleMealPlanChange = (planId: string) => {
-    setSelectedMealPlan(planId);
-    setCheckedItems(new Set());
-    fetchGroceryList(planId);
-  };
 
   const toggleCheckItem = (itemName: string) => {
     const newChecked = new Set(checkedItems);
@@ -100,13 +91,13 @@ export function GroceryListPage() {
     );
   }
 
-  if (mealPlans.length === 0) {
+  if (!mealPlan) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 py-8">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Grocery List</h1>
           <div className="bg-white rounded-lg shadow p-12 text-center">
-            <p className="text-gray-600">No meal plans yet. Create a meal plan first to generate a grocery list.</p>
+            <p className="text-gray-600">No meal plan for this week yet.</p>
           </div>
         </div>
       </div>
@@ -118,25 +109,7 @@ export function GroceryListPage() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Grocery List</h1>
-          <p className="text-gray-600">Ingredients aggregated from your meal plan</p>
-        </div>
-
-        <div className="mb-8">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Select Meal Plan</label>
-          <select
-            value={selectedMealPlan}
-            onChange={(e) => handleMealPlanChange(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-          >
-            {mealPlans.map((plan) => (
-              <option key={plan.id} value={plan.id}>
-                Week of {new Date(plan.week_start_date).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric'
-                })}
-              </option>
-            ))}
-          </select>
+          <p className="text-gray-600">Week of {new Date(mealPlan.week_start_date).toLocaleDateString()}</p>
         </div>
 
         {groceryItems.length === 0 ? (
