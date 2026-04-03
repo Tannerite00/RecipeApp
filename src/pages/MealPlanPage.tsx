@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Trash2, Plus } from 'lucide-react';
 import { supabase, type MealPlan, type Recipe } from '../lib/supabase';
 
@@ -12,6 +13,7 @@ interface MealPlanWithItems extends MealPlan {
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export function MealPlanPage() {
+  const navigate = useNavigate();
   const [mealPlans, setMealPlans] = useState<MealPlanWithItems[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
@@ -162,7 +164,12 @@ export function MealPlanPage() {
                           <>
                             {selectedPlan.items[idx]?.recipes.map((recipe) => (
                               <div key={recipe.id} className="bg-blue-50 p-4 rounded-lg flex justify-between items-start gap-3 border border-blue-100">
-                                <p className="text-sm font-medium text-gray-900">{recipe.title}</p>
+                                <button
+                                  onClick={() => navigate(`/recipe/${recipe.id}`)}
+                                  className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left flex-1"
+                                >
+                                  {recipe.title}
+                                </button>
                                 <button
                                   onClick={async () => {
                                     const { data: items } = await supabase
