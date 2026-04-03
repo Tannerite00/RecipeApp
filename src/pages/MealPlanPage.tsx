@@ -165,7 +165,7 @@ export function MealPlanPage() {
                             {selectedPlan.items[idx]?.recipes.map((recipe) => (
                               <div key={recipe.id} className="bg-blue-50 p-4 rounded-lg flex justify-between items-start gap-3 border border-blue-100">
                                 <button
-                                  onClick={() => navigate(`/recipe/${recipe.id}`)}
+                                  onClick={() => navigate(`/recipe/${recipe.id}`, { state: { fromMealPlan: true } })}
                                   className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left flex-1"
                                 >
                                   {recipe.title}

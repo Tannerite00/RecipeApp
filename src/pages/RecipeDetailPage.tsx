@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Plus } from 'lucide-react';
 import { supabase, type Recipe } from '../lib/supabase';
 import { parseISO8601Duration } from '../lib/utils';
@@ -7,12 +7,17 @@ import { parseISO8601Duration } from '../lib/utils';
 export function RecipeDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [loading, setLoading] = useState(true);
   const [showMealPlanModal, setShowMealPlanModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
   const [mealPlans, setMealPlans] = useState<any[]>([]);
   const [selectedMealPlan, setSelectedMealPlan] = useState('');
+
+  const isFromMealPlan = location.state?.fromMealPlan === true;
+  const backPath = isFromMealPlan ? '/meal-plans' : '/';
+  const backText = isFromMealPlan ? 'Back to Meal Plan' : 'Back to Recipes';
 
   useEffect(() => {
     fetchRecipe();
@@ -96,11 +101,11 @@ export function RecipeDetailPage() {
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50 py-8">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate(backPath)}
           className="flex items-center gap-2 text-orange-600 hover:text-orange-700 mb-6 font-medium"
         >
           <ArrowLeft className="w-5 h-5" />
-          Back to Recipes
+          {backText}
         </button>
 
         <div className="bg-white rounded-lg shadow-lg p-8 mb-6">
