@@ -46,8 +46,17 @@ export function MealPlanPage() {
 
       if (error) throw error;
 
+      const seenWeeks = new Set<string>();
+      const uniquePlans = (data || []).filter(plan => {
+        if (seenWeeks.has(plan.week_start_date)) {
+          return false;
+        }
+        seenWeeks.add(plan.week_start_date);
+        return true;
+      });
+
       const plansWithItems = await Promise.all(
-        (data || []).map(async (plan) => {
+        uniquePlans.map(async (plan) => {
           const { data: items } = await supabase
             .from('meal_plan_items')
             .select('day_of_week, recipes(*)')

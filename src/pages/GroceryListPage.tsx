@@ -26,10 +26,20 @@ export function GroceryListPage() {
         .order('week_start_date', { ascending: false });
 
       if (error) throw error;
-      setMealPlans(data || []);
-      if (data && data.length > 0) {
-        setSelectedMealPlan(data[0].id);
-        fetchGroceryList(data[0].id);
+
+      const seenWeeks = new Set<string>();
+      const uniquePlans = (data || []).filter(plan => {
+        if (seenWeeks.has(plan.week_start_date)) {
+          return false;
+        }
+        seenWeeks.add(plan.week_start_date);
+        return true;
+      });
+
+      setMealPlans(uniquePlans);
+      if (uniquePlans.length > 0) {
+        setSelectedMealPlan(uniquePlans[0].id);
+        fetchGroceryList(uniquePlans[0].id);
       }
     } catch (err) {
       console.error('Error fetching meal plans:', err);
