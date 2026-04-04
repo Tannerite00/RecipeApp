@@ -2,9 +2,6 @@ import { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { supabase, type MealPlan, type Recipe } from '../lib/supabase';
 
-// ❌ removed import of aggregateIngredients (we override behavior)
-// import { aggregateIngredients } from '../lib/utils';
-
 interface Ingredient {
   name: string;
   quantity: number;
@@ -26,6 +23,8 @@ const UNIT_CONVERSIONS: Record<string, number> = {
   oz: 1 / 8,
   ounce: 1 / 8,
   ounces: 1 / 8,
+  slice: 1,
+  slices: 1,
 };
 
 const FRACTION_MAP: Record<number, string> = {
@@ -36,38 +35,58 @@ const FRACTION_MAP: Record<number, string> = {
   0.75: '3/4',
 };
 
-const parseQuantity = (qtyStr: string) => {
-  // handle mixed fractions like "1 1/2"
-  if (qtyStr.includes('/')) {
-    const parts = qtyStr.split(' ');
-    if (parts.length === 2) {
-      const whole = parseInt(parts[0], 10) || 0;
-      const [num, denom] = parts[1].split('/').map(Number);
-      if (!isNaN(num) && !isNaN(denom)) return whole + num / denom;
-    } else {
-      const [num, denom] = parts[0].split('/').map(Number);
-      if (!isNaN(num) && !isNaN(denom)) return num / denom;
-    }
-  }
-  const num = parseFloat(qtyStr);
-  return isNaN(num) ? 1 : num;
+// Map unicode fractions to decimal
+const UNICODE_FRACTIONS: Record<string, number> = {
+  '¼': 0.25,
+  '½': 0.5,
+  '¾': 0.75,
 };
 
+// parse quantity strings like "1", "1 1/2", "½", etc.
+const parseQuantity = (qtyStr: string) => {
+  qtyStr = qtyStr.trim();
+  if (!qtyStr) return 1;
+
+  // replace unicode fractions
+  Object.entries(UNICODE_FRACTIONS).forEach(([char, val]) => {
+    qtyStr = qtyStr.replace(char, ` ${val}`);
+  });
+
+  const parts = qtyStr.split(' ').filter(Boolean);
+  let total = 0;
+
+  parts.forEach(p => {
+    if (p.includes('/')) {
+      const [num, denom] = p.split('/').map(Number);
+      if (!isNaN(num) && !isNaN(denom)) total += num / denom;
+    } else {
+      const n = parseFloat(p);
+      if (!isNaN(n)) total += n;
+    }
+  });
+
+  return total || 1;
+};
+
+// parse an ingredient string into quantity, unit, and name
 const parseIngredient = (ingredient: string) => {
-  const parts = ingredient.trim().toLowerCase().split(' ');
+  const trimmed = ingredient.trim();
+  const match = trimmed.match(/^([\d\s\/\u00bc-\u00be\u2150-\u215e]+)?\s*([a-zA-Z]+)?\s*(.*)$/);
 
-  const quantity = parseQuantity(parts[0]);
-  let unit = parts[1] || '';
-  let name = parts.slice(2).join(' ') || parts.slice(1).join(' ');
+  if (!match) return { quantity: 1, unit: 'count', name: trimmed };
 
-  if (!UNIT_CONVERSIONS[unit]) {
-    name = parts.slice(1).join(' ');
+  let [, qtyStr, unit, name] = match;
+  const quantity = qtyStr ? parseQuantity(qtyStr) : 1;
+
+  if (!unit || !UNIT_CONVERSIONS[unit.toLowerCase()]) {
+    name = [unit, name].filter(Boolean).join(' ').trim();
     unit = 'count';
   }
 
-  return { quantity, unit, name };
+  return { quantity, unit: unit ? unit.toLowerCase() : 'count', name: name.trim() };
 };
 
+// aggregate ingredients smartly
 const aggregateIngredientsSmart = (ingredientLists: string[][]) => {
   const result: Record<string, { quantity: number; unit: string }> = {};
 
@@ -79,11 +98,9 @@ const aggregateIngredientsSmart = (ingredientLists: string[][]) => {
         result[name] = { quantity: 0, unit };
       }
 
-      // convert to base unit for summing
       const convertedQty = quantity * (UNIT_CONVERSIONS[unit] || 1);
       result[name].quantity += convertedQty;
 
-      // always keep the largest unit for display
       if (unit !== 'count') result[name].unit = 'cup';
     });
   });
@@ -91,13 +108,13 @@ const aggregateIngredientsSmart = (ingredientLists: string[][]) => {
   return result;
 };
 
+// format ingredient for display
 const formatIngredient = (name: string, data: any) => {
   if (data.unit === 'count') {
-    const qty = Math.round(data.quantity * 100) / 100; // round small float errors
+    const qty = Math.round(data.quantity * 100) / 100;
     return `${qty} ${name}${qty > 1 ? 's' : ''}`;
   }
 
-  // convert decimal to fraction if possible
   const whole = Math.floor(data.quantity);
   const fraction = data.quantity - whole;
   const roundedFrac = Object.keys(FRACTION_MAP)
@@ -185,7 +202,6 @@ export function GroceryListPage() {
       const recipes: Recipe[] = items?.map(item => item.recipes).flat() || [];
       const ingredientLists = recipes.map(r => r.ingredients);
 
-      // ✅ use new smarter aggregation
       const aggregated = aggregateIngredientsSmart(ingredientLists);
 
       const ingredientArray: Ingredient[] = Object.entries(aggregated)
