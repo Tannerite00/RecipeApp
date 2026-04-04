@@ -10,6 +10,7 @@ export function RecipeListPage() {
   const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('');
+  const [searchMode, setSearchMode] = useState<'name' | 'ingredients'>('name');
   const [loading, setLoading] = useState(true);
   const [recipeTypes, setRecipeTypes] = useState<string[]>([]);
 
@@ -46,13 +47,21 @@ export function RecipeListPage() {
 
     if (searchQuery.trim() !== '') {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(recipe =>
-        recipe.title.toLowerCase().includes(query)
-      );
+      if (searchMode === 'name') {
+        filtered = filtered.filter(recipe =>
+          recipe.title.toLowerCase().includes(query)
+        );
+      } else {
+        filtered = filtered.filter(recipe =>
+          recipe.ingredients.some(ingredient =>
+            ingredient.toLowerCase().includes(query)
+          )
+        );
+      }
     }
 
     setFilteredRecipes(filtered);
-  }, [searchQuery, selectedType, recipes]);
+  }, [searchQuery, selectedType, searchMode, recipes]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50">
@@ -63,11 +72,36 @@ export function RecipeListPage() {
         </div>
 
         <div className="mb-8 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="inline-flex rounded-lg border border-gray-300 bg-white">
+              <button
+                onClick={() => setSearchMode('name')}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  searchMode === 'name'
+                    ? 'bg-orange-500 text-white'
+                    : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                By Name
+              </button>
+              <button
+                onClick={() => setSearchMode('ingredients')}
+                className={`px-4 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
+                  searchMode === 'ingredients'
+                    ? 'bg-orange-500 text-white'
+                    : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                By Ingredients
+              </button>
+            </div>
+          </div>
+
           <div className="relative">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
-              placeholder="Search recipes by name..."
+              placeholder={searchMode === 'name' ? 'Search recipes by name...' : 'Search by ingredient...'}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
