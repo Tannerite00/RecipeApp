@@ -52,11 +52,16 @@ export function RecipeListPage() {
           recipe.title.toLowerCase().includes(query)
         );
       } else {
-        filtered = filtered.filter(recipe =>
-          recipe.ingredients.some(ingredient =>
-            ingredient.toLowerCase().includes(query)
-          )
-        );
+        const searchTerms = query.split(',').map(term => term.trim()).filter(Boolean);
+        if (searchTerms.length > 0) {
+          filtered = filtered.filter(recipe =>
+            searchTerms.every(term =>
+              recipe.ingredients.some(ingredient =>
+                ingredient.toLowerCase().includes(term)
+              )
+            )
+          );
+        }
       }
     }
 
@@ -101,7 +106,7 @@ export function RecipeListPage() {
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
-              placeholder={searchMode === 'name' ? 'Search recipes by name...' : 'Search by ingredient...'}
+              placeholder={searchMode === 'name' ? 'Search recipes by name...' : 'Search by ingredient... (comma separate for AND)'}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
