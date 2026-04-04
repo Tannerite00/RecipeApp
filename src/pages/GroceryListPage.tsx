@@ -1,13 +1,80 @@
 import { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { supabase, type MealPlan, type Recipe } from '../lib/supabase';
-import { aggregateIngredients } from '../lib/utils';
+
+// ❌ removed import of aggregateIngredients (we override behavior)
+// import { aggregateIngredients } from '../lib/utils';
 
 interface Ingredient {
   name: string;
-  count: number;
+  quantity: number;
+  unit: string;
 }
 
+// ----------------------
+// 🆕 INGREDIENT PARSING + CONVERSION
+// ----------------------
+const UNIT_CONVERSIONS: Record<string, number> = {
+  cup: 1,
+  cups: 1,
+  tbsp: 1 / 16,
+  tablespoon: 1 / 16,
+  tablespoons: 1 / 16,
+  tsp: 1 / 48,
+  teaspoon: 1 / 48,
+  teaspoons: 1 / 48,
+  oz: 1 / 8,
+  ounce: 1 / 8,
+  ounces: 1 / 8,
+};
+
+const parseIngredient = (ingredient: string) => {
+  const parts = ingredient.toLowerCase().split(' ');
+
+  let quantity = parseFloat(parts[0]);
+  if (isNaN(quantity)) quantity = 1;
+
+  let unit = parts[1] || '';
+  let name = parts.slice(2).join(' ') || parts.slice(1).join(' ');
+
+  if (!UNIT_CONVERSIONS[unit]) {
+    name = parts.slice(1).join(' ');
+    unit = 'count';
+  }
+
+  return { quantity, unit, name };
+};
+
+const aggregateIngredientsSmart = (ingredientLists: string[][]) => {
+  const result: Record<string, { quantity: number; unit: string }> = {};
+
+  ingredientLists.forEach(list => {
+    list.forEach(ingredient => {
+      const { quantity, unit, name } = parseIngredient(ingredient);
+
+      if (!result[name]) {
+        result[name] = { quantity: 0, unit };
+      }
+
+      const convertedQty = quantity * (UNIT_CONVERSIONS[unit] || 1);
+      result[name].quantity += convertedQty;
+    });
+  });
+
+  return result;
+};
+
+const formatIngredient = (name: string, data: any) => {
+  if (data.unit === 'count') {
+    return `${data.quantity} ${name}${data.quantity > 1 ? 's' : ''}`;
+  }
+
+  return `${data.quantity.toFixed(2)} cups ${name}`;
+};
+
+// ----------------------
+// COMPONENT
+// ----------------------
 export function GroceryListPage() {
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [selectedMealPlan, setSelectedMealPlan] = useState('');
@@ -81,10 +148,16 @@ export function GroceryListPage() {
 
       const recipes: Recipe[] = items?.map(item => item.recipes).flat() || [];
       const ingredientLists = recipes.map(r => r.ingredients);
-      const aggregated = aggregateIngredients(ingredientLists);
+
+      // ✅ use new smarter aggregation
+      const aggregated = aggregateIngredientsSmart(ingredientLists);
 
       const ingredientArray: Ingredient[] = Object.entries(aggregated)
-        .map(([name, count]) => ({ name, count }))
+        .map(([name, data]) => ({
+          name,
+          quantity: data.quantity,
+          unit: data.unit
+        }))
         .sort((a, b) => a.name.localeCompare(b.name));
 
       setGroceryItems(ingredientArray);
@@ -162,8 +235,7 @@ export function GroceryListPage() {
           >
             {mealPlans.map(plan => (
               <option key={plan.id} value={plan.id}>
-                Week of{' '}
-                {new Date(plan.week_start_date).toLocaleDateString()}
+                Week of {new Date(plan.week_start_date).toLocaleDateString()}
               </option>
             ))}
           </select>
@@ -177,7 +249,6 @@ export function GroceryListPage() {
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow overflow-hidden">
-            {/* HEADER */}
             <div
               className={`px-6 py-4 transition-all duration-500 ${
                 isComplete
@@ -203,7 +274,6 @@ export function GroceryListPage() {
               )}
             </div>
 
-            {/* LIST */}
             <div className="divide-y">
               {groceryItems.map((item, idx) => (
                 <div
@@ -232,12 +302,8 @@ export function GroceryListPage() {
                         : ''
                     }`}
                   >
-                    {item.name}
+                    {formatIngredient(item.name, item)}
                   </p>
-
-                  <div className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full font-semibold">
-                    {item.count}
-                  </div>
                 </div>
               ))}
             </div>
