@@ -28,12 +28,35 @@ const UNIT_CONVERSIONS: Record<string, number> = {
   ounces: 1 / 8,
 };
 
+const FRACTION_MAP: Record<number, string> = {
+  0.25: '1/4',
+  0.33: '1/3',
+  0.5: '1/2',
+  0.66: '2/3',
+  0.75: '3/4',
+};
+
+const parseQuantity = (qtyStr: string) => {
+  // handle mixed fractions like "1 1/2"
+  if (qtyStr.includes('/')) {
+    const parts = qtyStr.split(' ');
+    if (parts.length === 2) {
+      const whole = parseInt(parts[0], 10) || 0;
+      const [num, denom] = parts[1].split('/').map(Number);
+      if (!isNaN(num) && !isNaN(denom)) return whole + num / denom;
+    } else {
+      const [num, denom] = parts[0].split('/').map(Number);
+      if (!isNaN(num) && !isNaN(denom)) return num / denom;
+    }
+  }
+  const num = parseFloat(qtyStr);
+  return isNaN(num) ? 1 : num;
+};
+
 const parseIngredient = (ingredient: string) => {
-  const parts = ingredient.toLowerCase().split(' ');
+  const parts = ingredient.trim().toLowerCase().split(' ');
 
-  let quantity = parseFloat(parts[0]);
-  if (isNaN(quantity)) quantity = 1;
-
+  const quantity = parseQuantity(parts[0]);
   let unit = parts[1] || '';
   let name = parts.slice(2).join(' ') || parts.slice(1).join(' ');
 
@@ -56,8 +79,12 @@ const aggregateIngredientsSmart = (ingredientLists: string[][]) => {
         result[name] = { quantity: 0, unit };
       }
 
+      // convert to base unit for summing
       const convertedQty = quantity * (UNIT_CONVERSIONS[unit] || 1);
       result[name].quantity += convertedQty;
+
+      // always keep the largest unit for display
+      if (unit !== 'count') result[name].unit = 'cup';
     });
   });
 
@@ -66,10 +93,19 @@ const aggregateIngredientsSmart = (ingredientLists: string[][]) => {
 
 const formatIngredient = (name: string, data: any) => {
   if (data.unit === 'count') {
-    return `${data.quantity} ${name}${data.quantity > 1 ? 's' : ''}`;
+    const qty = Math.round(data.quantity * 100) / 100; // round small float errors
+    return `${qty} ${name}${qty > 1 ? 's' : ''}`;
   }
 
-  return `${data.quantity.toFixed(2)} cups ${name}`;
+  // convert decimal to fraction if possible
+  const whole = Math.floor(data.quantity);
+  const fraction = data.quantity - whole;
+  const roundedFrac = Object.keys(FRACTION_MAP)
+    .map(Number)
+    .find(f => Math.abs(f - fraction) < 0.02);
+
+  const fractionStr = roundedFrac ? ` ${FRACTION_MAP[roundedFrac]}` : '';
+  return `${whole > 0 ? whole : ''}${fractionStr} ${data.unit} ${name}`.trim();
 };
 
 // ----------------------
