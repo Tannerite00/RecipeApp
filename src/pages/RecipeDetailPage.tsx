@@ -5,6 +5,7 @@ import { supabase, type Recipe } from '../lib/supabase';
 import { parseISO8601Duration } from '../lib/utils';
 import { StarRating } from '../components/StarRating';
 import { RecipeComments } from '../components/RecipeComments';
+import { ensureMealPlanWeeks, cutoffWeekStart, currentWeekStart } from '../lib/mealPlanWeeks';
 import { cacheGet, cacheSet, enqueueRating } from '../lib/offlineCache';
 import { flushRatingQueue } from '../lib/ratingSync';
 
@@ -15,8 +16,8 @@ export function RecipeDetailPage() {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [loading, setLoading] = useState(true);
   const [showMealPlanModal, setShowMealPlanModal] = useState(false);
-  const [selectedDate, setSelectedDate] = useState('');
-  const [mealPlans, setMealPlans] = useState<any[]>([]);
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number | ''>('');
+  const [mealPlans, setMealPlans] = useState<{ id: string; week_start_date: string }[]>([]);
   const [selectedMealPlan, setSelectedMealPlan] = useState('');
   const [ratingAverage, setRatingAverage] = useState(0);
   const [ratingCount, setRatingCount] = useState(0);
@@ -123,15 +124,30 @@ export function RecipeDetailPage() {
 
   async function fetchMealPlans() {
     try {
+      await ensureMealPlanWeeks();
+
       const { data, error } = await supabase
         .from('meal_plans')
-        .select('*')
-        .order('week_start_date', { ascending: false });
+        .select('id, week_start_date')
+        .order('week_start_date', { ascending: true });
 
       if (error) throw error;
-      setMealPlans(data || []);
-      if (data && data.length > 0) {
-        setSelectedMealPlan(data[0].id);
+
+      const cutoff = cutoffWeekStart();
+      const seen = new Set<string>();
+      const unique = (data || [])
+        .filter((p) => p.week_start_date >= cutoff)
+        .filter((p) => {
+          if (seen.has(p.week_start_date)) return false;
+          seen.add(p.week_start_date);
+          return true;
+        });
+
+      setMealPlans(unique);
+      if (unique.length > 0) {
+        const thisWeek = currentWeekStart();
+        const initial = unique.find((p) => p.week_start_date === thisWeek) ?? unique[0];
+        setSelectedMealPlan(initial.id);
       }
     } catch (err) {
       console.error('Error fetching meal plans:', err);
@@ -139,26 +155,30 @@ export function RecipeDetailPage() {
   }
 
   async function addToMealPlan() {
-    if (!selectedMealPlan || !selectedDate || !id) return;
+    if (!selectedMealPlan || selectedDayIndex === '' || !id) return;
 
     try {
-      const dayOfWeek = new Date(selectedDate).getDay();
-      const adjustedDayOfWeek = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-
       const { error } = await supabase
         .from('meal_plan_items')
         .insert({
           meal_plan_id: selectedMealPlan,
           recipe_id: id,
-          day_of_week: adjustedDayOfWeek
+          day_of_week: selectedDayIndex
         });
 
       if (error) throw error;
       setShowMealPlanModal(false);
-      setSelectedDate('');
+      setSelectedDayIndex('');
     } catch (err) {
       console.error('Error adding to meal plan:', err);
     }
+  }
+
+  function formatDayOption(weekStart: string, offset: number): string {
+    const [y, m, d] = weekStart.split('-').map(Number);
+    const date = new Date(y, m - 1, d + offset);
+    const dayName = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][offset];
+    return `${dayName}, ${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
   }
 
   if (loading) {
@@ -284,7 +304,7 @@ export function RecipeDetailPage() {
               <button
                 onClick={() => {
                   setShowMealPlanModal(false);
-                  setSelectedDate('');
+                  setSelectedDayIndex('');
                 }}
                 className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
               >
@@ -327,14 +347,21 @@ export function RecipeDetailPage() {
                   </label>
                   <select
                     value={selectedMealPlan}
-                    onChange={(e) => setSelectedMealPlan(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedMealPlan(e.target.value);
+                      setSelectedDayIndex('');
+                    }}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                   >
-                    {mealPlans.map((plan) => (
-                      <option key={plan.id} value={plan.id}>
-                        Week of {new Date(plan.week_start_date).toLocaleDateString()}
-                      </option>
-                    ))}
+                    {mealPlans.map((plan) => {
+                      const [y, m, d] = plan.week_start_date.split('-').map(Number);
+                      const dt = new Date(y, m - 1, d);
+                      return (
+                        <option key={plan.id} value={plan.id}>
+                          Week of {dt.toLocaleDateString()}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 
@@ -342,12 +369,26 @@ export function RecipeDetailPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Select Day
                   </label>
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  />
+                  <select
+                    value={selectedDayIndex === '' ? '' : String(selectedDayIndex)}
+                    onChange={(e) =>
+                      setSelectedDayIndex(e.target.value === '' ? '' : Number(e.target.value))
+                    }
+                    disabled={!selectedMealPlan}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white disabled:bg-gray-100"
+                  >
+                    <option value="">Choose a day...</option>
+                    {selectedMealPlan &&
+                      (() => {
+                        const plan = mealPlans.find((p) => p.id === selectedMealPlan);
+                        if (!plan) return null;
+                        return [0, 1, 2, 3, 4, 5, 6].map((offset) => (
+                          <option key={offset} value={offset}>
+                            {formatDayOption(plan.week_start_date, offset)}
+                          </option>
+                        ));
+                      })()}
+                  </select>
                 </div>
 
                 <div className="flex gap-4">
@@ -362,7 +403,7 @@ export function RecipeDetailPage() {
                   </button>
                   <button
                     onClick={addToMealPlan}
-                    disabled={!selectedDate}
+                    disabled={selectedDayIndex === ''}
                     className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Add
