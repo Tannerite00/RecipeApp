@@ -33,3 +33,17 @@ export interface MealPlanItem {
   day_of_week: number;
   created_at: string;
 }
+
+export interface RecipeRating {
+  id: string;
+  user_id: string;
+  recipe_id: string;
+  rating: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RatingStats {
+  average: number;
+  count: number;
+}

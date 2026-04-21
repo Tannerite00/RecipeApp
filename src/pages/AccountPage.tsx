@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail, Lock, LogOut, Calendar, Check, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
+import { StarRating } from '../components/StarRating';
+import { Link } from 'react-router-dom';
 
 const SPECIAL_CHARS = /[`!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/;
 
@@ -22,14 +24,34 @@ export function AccountPage() {
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [userRatings, setUserRatings] = useState<
+    { id: string; rating: number; updated_at: string; recipe: { id: string; title: string; type: string | null } | null }[]
+  >([]);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       setUser(data.user);
       setLoading(false);
-      if (!data.user) navigate('/auth');
+      if (!data.user) {
+        navigate('/auth');
+        return;
+      }
+      await loadUserRatings(data.user.id);
     });
   }, [navigate]);
+
+  async function loadUserRatings(uid: string) {
+    const { data, error } = await supabase
+      .from('recipe_ratings')
+      .select('id, rating, updated_at, recipe:recipes(id, title, type)')
+      .eq('user_id', uid)
+      .order('updated_at', { ascending: false });
+    if (error) {
+      console.error('Error loading user ratings:', error);
+      return;
+    }
+    setUserRatings((data as any) || []);
+  }
 
   const ruleResults = useMemo(
     () => PASSWORD_RULES.map((r) => ({ ...r, valid: r.test(newPassword) })),
@@ -131,6 +153,47 @@ export function AccountPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 mb-6">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">Your Ratings</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Recipes you've rated ({userRatings.length})
+          </p>
+          {userRatings.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              You haven't rated any recipes yet. Browse the{' '}
+              <Link to="/" className="text-orange-600 hover:text-orange-700 font-medium">
+                recipe collection
+              </Link>{' '}
+              to leave your first rating.
+            </p>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {userRatings.map((r) => (
+                <li key={r.id} className="py-3 flex items-center justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    {r.recipe ? (
+                      <Link
+                        to={`/recipe/${r.recipe.id}`}
+                        className="block text-sm sm:text-base font-medium text-gray-900 hover:text-orange-700 truncate"
+                      >
+                        {r.recipe.title}
+                      </Link>
+                    ) : (
+                      <span className="block text-sm sm:text-base font-medium text-gray-500 italic">
+                        Recipe removed
+                      </span>
+                    )}
+                    {r.recipe?.type && (
+                      <p className="text-xs text-gray-500 mt-0.5">{r.recipe.type}</p>
+                    )}
+                  </div>
+                  <StarRating value={r.rating} readOnly showCount={false} size="sm" />
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 mb-6">

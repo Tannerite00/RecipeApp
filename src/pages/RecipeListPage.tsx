@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, X } from 'lucide-react';
 import { supabase, type Recipe } from '../lib/supabase';
 import { parseISO8601Duration } from '../lib/utils';
+import { StarRating } from '../components/StarRating';
 
 export function RecipeListPage() {
   const navigate = useNavigate();
@@ -13,9 +14,11 @@ export function RecipeListPage() {
   const [searchMode, setSearchMode] = useState<'name' | 'ingredients'>('name');
   const [loading, setLoading] = useState(true);
   const [recipeTypes, setRecipeTypes] = useState<string[]>([]);
+  const [ratingStats, setRatingStats] = useState<Record<string, { average: number; count: number }>>({});
 
   useEffect(() => {
     fetchRecipes();
+    fetchRatingStats();
   }, []);
 
   async function fetchRecipes() {
@@ -35,6 +38,30 @@ export function RecipeListPage() {
       console.error('Error fetching recipes:', err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchRatingStats() {
+    try {
+      const { data, error } = await supabase
+        .from('recipe_ratings')
+        .select('recipe_id, rating');
+      if (error) throw error;
+
+      const acc: Record<string, { total: number; count: number }> = {};
+      (data || []).forEach((r: { recipe_id: string; rating: number }) => {
+        if (!acc[r.recipe_id]) acc[r.recipe_id] = { total: 0, count: 0 };
+        acc[r.recipe_id].total += r.rating;
+        acc[r.recipe_id].count += 1;
+      });
+
+      const stats: Record<string, { average: number; count: number }> = {};
+      Object.entries(acc).forEach(([id, v]) => {
+        stats[id] = { average: v.count ? v.total / v.count : 0, count: v.count };
+      });
+      setRatingStats(stats);
+    } catch (err) {
+      console.error('Error fetching rating stats:', err);
     }
   }
 
@@ -168,11 +195,14 @@ export function RecipeListPage() {
                     <span className="font-medium">Cook:</span>
                     <p className="text-gray-600">{parseISO8601Duration(recipe.cook_time)}</p>
                   </div>
-                  {recipe.rating && (
-                    <div className="ml-auto">
-                      <p className="text-gray-600">★ {recipe.rating}</p>
-                    </div>
-                  )}
+                </div>
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <StarRating
+                    value={ratingStats[recipe.id]?.average ?? 0}
+                    count={ratingStats[recipe.id]?.count ?? 0}
+                    readOnly
+                    size="sm"
+                  />
                 </div>
               </button>
             ))}
