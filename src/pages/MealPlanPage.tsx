@@ -13,6 +13,11 @@ interface MealPlanWithItems extends MealPlan {
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+function formatWeekStart(weekStart: string): string {
+  const [y, m, d] = weekStart.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString();
+}
+
 export function MealPlanPage() {
   const navigate = useNavigate();
   const [mealPlans, setMealPlans] = useState<MealPlanWithItems[]>([]);
@@ -145,7 +150,7 @@ export function MealPlanPage() {
               >
                 {mealPlans.map((plan) => (
                   <option key={plan.id} value={plan.id}>
-                    Week of {new Date(plan.week_start_date).toLocaleDateString()}
+                    Week of {formatWeekStart(plan.week_start_date)}
                   </option>
                 ))}
               </select>
@@ -155,7 +160,7 @@ export function MealPlanPage() {
               <div className="bg-white rounded-lg shadow overflow-hidden">
                 <div className="bg-blue-600 px-4 sm:px-6 py-3 sm:py-4">
                   <h2 className="text-lg sm:text-2xl font-bold text-white">
-                    Week of {new Date(selectedPlan.week_start_date).toLocaleDateString()}
+                    Week of {formatWeekStart(selectedPlan.week_start_date)}
                   </h2>
                 </div>
                 <div className="divide-y">

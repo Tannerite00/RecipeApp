@@ -126,6 +126,11 @@ const formatIngredient = (name: string, data: any) => {
   return `${whole > 0 ? whole : ''}${fractionStr} ${data.unit} ${name}`.trim();
 };
 
+function formatWeekStart(weekStart: string): string {
+  const [y, m, d] = weekStart.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString();
+}
+
 // ----------------------
 // COMPONENT
 // ----------------------
@@ -296,7 +301,7 @@ export function GroceryListPage() {
           >
             {mealPlans.map(plan => (
               <option key={plan.id} value={plan.id}>
-                Week of {new Date(plan.week_start_date).toLocaleDateString()}
+                Week of {formatWeekStart(plan.week_start_date)}
               </option>
             ))}
           </select>
