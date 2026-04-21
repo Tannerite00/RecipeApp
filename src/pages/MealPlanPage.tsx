@@ -114,11 +114,11 @@ export function MealPlanPage() {
   const selectedPlan = mealPlans.find(p => p.id === selectedPlanId);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 py-6 sm:py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900">Meal Planning</h1>
-          <p className="text-gray-600 mt-2">Total meal plans: {mealPlans.length}</p>
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">Meal Planning</h1>
+          <p className="text-sm sm:text-base text-gray-600 mt-2">Total meal plans: {mealPlans.length}</p>
         </div>
 
         {mealPlans.length === 0 ? (
@@ -127,7 +127,7 @@ export function MealPlanPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow p-6">
+            <div className="bg-white rounded-lg shadow p-4 sm:p-6">
               <label className="block text-sm font-medium text-gray-700 mb-3">Select Week</label>
               <select
                 value={selectedPlanId || ''}
@@ -144,17 +144,17 @@ export function MealPlanPage() {
 
             {selectedPlan && (
               <div className="bg-white rounded-lg shadow overflow-hidden">
-                <div className="bg-blue-600 px-6 py-4">
-                  <h2 className="text-2xl font-bold text-white">
+                <div className="bg-blue-600 px-4 sm:px-6 py-3 sm:py-4">
+                  <h2 className="text-lg sm:text-2xl font-bold text-white">
                     Week of {new Date(selectedPlan.week_start_date).toLocaleDateString()}
                   </h2>
                 </div>
                 <div className="divide-y">
                   {DAYS.map((day, idx) => (
-                    <div key={idx} className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <h3 className="text-lg font-bold text-gray-900">{day}</h3>
-                        <span className="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-medium">
+                    <div key={idx} className="p-4 sm:p-6">
+                      <div className="flex items-start justify-between gap-2 mb-3 sm:mb-4">
+                        <h3 className="text-base sm:text-lg font-bold text-gray-900">{day}</h3>
+                        <span className="text-xs sm:text-sm bg-blue-100 text-blue-800 px-2 sm:px-3 py-1 rounded-full font-medium whitespace-nowrap">
                           {selectedPlan.items[idx]?.recipes.length || 0} recipe{(selectedPlan.items[idx]?.recipes.length || 0) !== 1 ? 's' : ''}
                         </span>
                       </div>

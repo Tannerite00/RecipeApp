@@ -98,52 +98,52 @@ export function RecipeDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50 py-6 sm:py-8">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <button
           onClick={() => navigate(backPath)}
-          className="flex items-center gap-2 text-orange-600 hover:text-orange-700 mb-6 font-medium"
+          className="flex items-center gap-2 text-orange-600 hover:text-orange-700 mb-4 sm:mb-6 font-medium text-sm sm:text-base"
         >
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           {backText}
         </button>
 
-        <div className="bg-white rounded-lg shadow-lg p-8 mb-6">
-          <h1 className="text-4xl font-bold text-gray-900 mb-6">{recipe.title}</h1>
+        <div className="bg-white rounded-lg shadow-lg p-5 sm:p-8 mb-6">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-4 sm:mb-6 break-words">{recipe.title}</h1>
 
-          <div className="mb-8">
+          <div className="mb-6 sm:mb-8">
             <button
               onClick={() => setShowMealPlanModal(true)}
-              className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg font-medium transition"
+              className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg font-medium transition text-sm sm:text-base w-full sm:w-auto justify-center"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
               Add to Meal Plan
             </button>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8 pb-8 border-b border-gray-200">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8 pb-6 sm:pb-8 border-b border-gray-200">
             <div>
-              <h3 className="text-sm font-semibold text-gray-600 uppercase">Prep Time</h3>
-              <p className="text-lg font-bold text-gray-900">{parseISO8601Duration(recipe.prep_time)}</p>
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-600 uppercase">Prep Time</h3>
+              <p className="text-base sm:text-lg font-bold text-gray-900">{parseISO8601Duration(recipe.prep_time)}</p>
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-gray-600 uppercase">Cook Time</h3>
-              <p className="text-lg font-bold text-gray-900">{parseISO8601Duration(recipe.cook_time)}</p>
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-600 uppercase">Cook Time</h3>
+              <p className="text-base sm:text-lg font-bold text-gray-900">{parseISO8601Duration(recipe.cook_time)}</p>
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-gray-600 uppercase">Servings</h3>
-              <p className="text-lg font-bold text-gray-900">{recipe.servings}</p>
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-600 uppercase">Servings</h3>
+              <p className="text-base sm:text-lg font-bold text-gray-900">{recipe.servings}</p>
             </div>
             {recipe.rating && (
               <div>
-                <h3 className="text-sm font-semibold text-gray-600 uppercase">Rating</h3>
-                <p className="text-lg font-bold text-gray-900">★ {recipe.rating}</p>
+                <h3 className="text-xs sm:text-sm font-semibold text-gray-600 uppercase">Rating</h3>
+                <p className="text-base sm:text-lg font-bold text-gray-900">★ {recipe.rating}</p>
               </div>
             )}
           </div>
 
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Ingredients</h2>
+          <div className="mb-6 sm:mb-8">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3 sm:mb-4">Ingredients</h2>
             <ul className="space-y-2">
               {recipe.ingredients.map((ingredient, idx) => {
                 const cleaned = ingredient.trim().replace(/<[^>]*>/g, '');
@@ -158,14 +158,14 @@ export function RecipeDetailPage() {
           </div>
 
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Instructions</h2>
-            <ol className="space-y-4">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3 sm:mb-4">Instructions</h2>
+            <ol className="space-y-3 sm:space-y-4">
               {recipe.instructions.map((instruction, idx) => (
-                <li key={idx} className="flex gap-4">
-                  <span className="flex-shrink-0 flex items-center justify-center h-8 w-8 rounded-full bg-orange-100 text-orange-600 font-bold">
+                <li key={idx} className="flex gap-3 sm:gap-4">
+                  <span className="flex-shrink-0 flex items-center justify-center h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-orange-100 text-orange-600 font-bold text-sm sm:text-base">
                     {idx + 1}
                   </span>
-                  <p className="text-gray-700 pt-1">{instruction.replace(/<[^>]*>/g, '')}</p>
+                  <p className="text-sm sm:text-base text-gray-700 pt-0.5 sm:pt-1">{instruction.replace(/<[^>]*>/g, '')}</p>
                 </li>
               ))}
             </ol>

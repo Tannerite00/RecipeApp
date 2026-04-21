@@ -70,10 +70,10 @@ export function RecipeListPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Recipe Collection</h1>
-          <p className="text-gray-600">Browse and discover delicious recipes</p>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2">Recipe Collection</h1>
+          <p className="text-sm sm:text-base text-gray-600">Browse and discover delicious recipes</p>
         </div>
 
         <div className="mb-8 space-y-4">
@@ -150,16 +150,16 @@ export function RecipeListPage() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {filteredRecipes.map((recipe) => (
               <button
                 key={recipe.id}
                 onClick={() => navigate(`/recipe/${recipe.id}`)}
-                className="bg-white rounded-lg shadow hover:shadow-lg transition p-6 text-left hover:scale-105 transform duration-200"
+                className="bg-white rounded-lg shadow hover:shadow-lg transition p-4 sm:p-6 text-left hover:scale-105 transform duration-200"
               >
-                <h3 className="text-xl font-bold text-gray-900 mb-2 line-clamp-2">{recipe.title}</h3>
-                <p className="text-sm text-gray-600 mb-4">{recipe.type}</p>
-                <div className="flex gap-4 text-sm text-gray-700 items-center">
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 line-clamp-2">{recipe.title}</h3>
+                <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">{recipe.type}</p>
+                <div className="flex flex-wrap gap-3 sm:gap-4 text-xs sm:text-sm text-gray-700 items-center">
                   <div>
                     <span className="font-medium">Prep:</span>
                     <p className="text-gray-600">{parseISO8601Duration(recipe.prep_time)}</p>

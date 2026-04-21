@@ -251,11 +251,11 @@ export function GroceryListPage() {
 
   if (mealPlans.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 py-8">
-        <div className="max-w-3xl mx-auto px-4">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Grocery List</h1>
-          <div className="bg-white rounded-lg shadow p-12 text-center">
-            <p className="text-gray-600">
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 py-6 sm:py-8">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-4 sm:mb-6">Grocery List</h1>
+          <div className="bg-white rounded-lg shadow p-8 sm:p-12 text-center">
+            <p className="text-sm sm:text-base text-gray-600">
               No meal plans yet. Create one first.
             </p>
           </div>
@@ -265,18 +265,18 @@ export function GroceryListPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 py-8">
-      <div className="max-w-3xl mx-auto px-4">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 py-6 sm:py-8">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2">
             Grocery List
           </h1>
-          <p className="text-gray-600">
+          <p className="text-sm sm:text-base text-gray-600">
             Ingredients aggregated from your meal plan
           </p>
         </div>
 
-        <div className="mb-8">
+        <div className="mb-6 sm:mb-8">
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Select Meal Plan
           </label>
@@ -302,13 +302,13 @@ export function GroceryListPage() {
         ) : (
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div
-              className={`px-6 py-4 transition-all duration-500 ${
+              className={`px-4 sm:px-6 py-3 sm:py-4 transition-all duration-500 ${
                 isComplete
                   ? 'bg-gradient-to-r from-blue-400 to-blue-600'
                   : 'bg-gradient-to-r from-green-600 to-emerald-600'
               }`}
             >
-              <h2 className="text-2xl font-bold text-white">
+              <h2 className="text-lg sm:text-2xl font-bold text-white">
                 {checkedCount} of {totalCount} items purchased
               </h2>
 
