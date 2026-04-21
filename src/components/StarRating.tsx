@@ -6,7 +6,6 @@ type Size = 'sm' | 'md' | 'lg';
 interface StarRatingProps {
   value: number;
   count?: number;
-  userRating?: number | null;
   onRate?: (rating: number) => void;
   readOnly?: boolean;
   size?: Size;
@@ -16,13 +15,23 @@ interface StarRatingProps {
 const SIZE_MAP: Record<Size, string> = {
   sm: 'w-3.5 h-3.5',
   md: 'w-5 h-5',
-  lg: 'w-6 h-6',
+  lg: 'w-7 h-7',
 };
+
+function snapToHalf(v: number): number {
+  if (!Number.isFinite(v) || v <= 0) return 0;
+  return Math.min(5, Math.round(v * 2) / 2);
+}
+
+function fillPercent(displayValue: number, n: number): number {
+  if (displayValue >= n) return 100;
+  if (displayValue >= n - 0.5) return 50;
+  return 0;
+}
 
 export function StarRating({
   value,
   count = 0,
-  userRating = null,
   onRate,
   readOnly = false,
   size = 'md',
@@ -31,7 +40,8 @@ export function StarRating({
   const [hovered, setHovered] = useState<number | null>(null);
 
   const interactive = !readOnly && !!onRate;
-  const displayValue = interactive && hovered !== null ? hovered : userRating ?? Math.round(value);
+  const baseValue = snapToHalf(value);
+  const displayValue = interactive && hovered !== null ? hovered : baseValue;
 
   const starClass = SIZE_MAP[size];
   const textClass = size === 'sm' ? 'text-xs' : size === 'lg' ? 'text-base' : 'text-sm';
@@ -43,13 +53,15 @@ export function StarRating({
         onMouseLeave={() => setHovered(null)}
       >
         {[1, 2, 3, 4, 5].map((n) => {
-          const filled = n <= displayValue;
+          const pct = fillPercent(displayValue, n);
           return (
             <button
               key={n}
               type="button"
               disabled={!interactive}
               onMouseEnter={() => interactive && setHovered(n)}
+              onFocus={() => interactive && setHovered(n)}
+              onBlur={() => interactive && setHovered(null)}
               onClick={(e) => {
                 if (!interactive) return;
                 e.stopPropagation();
@@ -61,13 +73,19 @@ export function StarRating({
               }`}
               aria-label={`${n} star${n === 1 ? '' : 's'}`}
             >
-              <Star
-                className={`${starClass} transition-colors ${
-                  filled
-                    ? 'fill-amber-400 text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.6)]'
-                    : 'fill-none text-gray-300'
-                }`}
-              />
+              <span className="relative inline-block leading-none">
+                <Star className={`${starClass} fill-none text-gray-300`} />
+                {pct > 0 && (
+                  <span
+                    className="absolute inset-y-0 left-0 overflow-hidden pointer-events-none"
+                    style={{ width: `${pct}%` }}
+                  >
+                    <Star
+                      className={`${starClass} fill-amber-400 text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.6)]`}
+                    />
+                  </span>
+                )}
+              </span>
             </button>
           );
         })}

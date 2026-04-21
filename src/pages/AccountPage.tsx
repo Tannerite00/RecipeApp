@@ -6,6 +6,7 @@ import type { User } from '@supabase/supabase-js';
 import { StarRating } from '../components/StarRating';
 import { Link } from 'react-router-dom';
 import { cacheGet, cacheSet } from '../lib/offlineCache';
+import { formatRecipeType } from '../lib/utils';
 
 const SPECIAL_CHARS = /[`!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/;
 
@@ -193,7 +194,7 @@ export function AccountPage() {
                       </span>
                     )}
                     {r.recipe?.type && (
-                      <p className="text-xs text-gray-500 mt-0.5">{r.recipe.type}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{formatRecipeType(r.recipe.type)}</p>
                     )}
                   </div>
                   <StarRating value={r.rating} readOnly showCount={false} size="sm" />

@@ -1,3 +1,8 @@
+export function formatRecipeType(type: string | null | undefined): string {
+  if (!type) return '';
+  return type.replace(/\s*&amp;\s*/g, ', ');
+}
+
 export function parseISO8601Duration(duration: string): string {
   if (!duration || duration === 'PT0D0H0M') return 'N/A';
 

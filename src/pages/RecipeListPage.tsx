@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, X } from 'lucide-react';
 import { supabase, type Recipe } from '../lib/supabase';
-import { parseISO8601Duration } from '../lib/utils';
+import { parseISO8601Duration, formatRecipeType } from '../lib/utils';
 import { StarRating } from '../components/StarRating';
 import { cacheGet, cacheSet, loadBundledRecipes } from '../lib/offlineCache';
 
@@ -181,7 +181,7 @@ export function RecipeListPage() {
               <option value="">All Types</option>
               {recipeTypes.map((type) => (
                 <option key={type} value={type}>
-                  {type}
+                  {formatRecipeType(type)}
                 </option>
               ))}
             </select>
@@ -216,7 +216,7 @@ export function RecipeListPage() {
                 className="bg-white rounded-lg shadow hover:shadow-lg transition p-4 sm:p-6 text-left hover:scale-105 transform duration-200"
               >
                 <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 line-clamp-2">{recipe.title}</h3>
-                <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">{recipe.type}</p>
+                <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">{formatRecipeType(recipe.type)}</p>
                 <div className="flex flex-wrap gap-3 sm:gap-4 text-xs sm:text-sm text-gray-700 items-center">
                   <div>
                     <span className="font-medium">Prep:</span>

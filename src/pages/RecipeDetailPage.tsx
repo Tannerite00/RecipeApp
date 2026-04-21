@@ -19,7 +19,6 @@ export function RecipeDetailPage() {
   const [selectedMealPlan, setSelectedMealPlan] = useState('');
   const [ratingAverage, setRatingAverage] = useState(0);
   const [ratingCount, setRatingCount] = useState(0);
-  const [userRating, setUserRating] = useState<number | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [ratingMessage, setRatingMessage] = useState<string | null>(null);
 
@@ -43,12 +42,10 @@ export function RecipeDetailPage() {
       setRatingAverage(cachedStats[id].average);
       setRatingCount(cachedStats[id].count);
     }
-    const cachedUser = cacheGet<Record<string, number>>('my-ratings');
 
     try {
       const { data: userData } = await supabase.auth.getUser();
-      const uid = userData.user?.id ?? null;
-      setCurrentUserId(uid);
+      setCurrentUserId(userData.user?.id ?? null);
 
       const { data: all, error: allErr } = await supabase
         .from('recipe_ratings')
@@ -61,17 +58,8 @@ export function RecipeDetailPage() {
       const average = count ? rows.reduce((a, r) => a + r.rating, 0) / count : 0;
       setRatingCount(count);
       setRatingAverage(average);
-
-      if (uid) {
-        const mine = rows.find((r) => r.user_id === uid);
-        setUserRating(mine?.rating ?? null);
-      } else {
-        setUserRating(null);
-      }
     } catch {
-      if (cachedUser && cachedUser[id] !== undefined) {
-        setUserRating(cachedUser[id]);
-      }
+      // keep cached values
     }
   }
 
@@ -83,7 +71,6 @@ export function RecipeDetailPage() {
     }
     if (!id) return;
 
-    setUserRating(rating);
     const myCache = cacheGet<Record<string, number>>('my-ratings') || {};
     myCache[id] = rating;
     cacheSet('my-ratings', myCache);
@@ -229,38 +216,30 @@ export function RecipeDetailPage() {
             <div>
               <h3 className="text-xs sm:text-sm font-semibold text-gray-600 uppercase">Rating</h3>
               <div className="mt-1">
-                <StarRating value={ratingAverage} count={ratingCount} readOnly size="md" />
+                <StarRating
+                  value={ratingAverage}
+                  count={ratingCount}
+                  onRate={handleRate}
+                  readOnly={false}
+                  size="md"
+                />
               </div>
+              {!currentUserId && (
+                <p className="mt-1 text-xs text-gray-500">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/auth')}
+                    className="text-orange-600 hover:text-orange-700 font-medium"
+                  >
+                    Sign in
+                  </button>{' '}
+                  to rate.
+                </p>
+              )}
+              {ratingMessage && (
+                <p className="mt-1 text-xs text-green-600">{ratingMessage}</p>
+              )}
             </div>
-          </div>
-
-          <div className="mb-6 sm:mb-8 pb-6 sm:pb-8 border-b border-gray-200">
-            <h3 className="text-xs sm:text-sm font-semibold text-gray-600 uppercase mb-2">
-              {userRating ? 'Your Rating' : 'Rate This Recipe'}
-            </h3>
-            <StarRating
-              value={userRating ?? 0}
-              count={ratingCount}
-              userRating={userRating}
-              onRate={handleRate}
-              showCount={false}
-              size="lg"
-            />
-            {!currentUserId && (
-              <p className="mt-2 text-xs sm:text-sm text-gray-500">
-                <button
-                  type="button"
-                  onClick={() => navigate('/auth')}
-                  className="text-orange-600 hover:text-orange-700 font-medium"
-                >
-                  Sign in
-                </button>{' '}
-                to rate this recipe.
-              </p>
-            )}
-            {ratingMessage && (
-              <p className="mt-2 text-xs sm:text-sm text-green-600">{ratingMessage}</p>
-            )}
           </div>
 
           <div className="mb-6 sm:mb-8">
