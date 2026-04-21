@@ -4,10 +4,15 @@ import { Trash2, Plus } from 'lucide-react';
 import { supabase, type MealPlan, type Recipe } from '../lib/supabase';
 import { ensureMealPlanWeeks, cutoffWeekStart, currentWeekStart } from '../lib/mealPlanWeeks';
 
+interface MealPlanItemEntry {
+  itemId: string;
+  recipe: Recipe;
+}
+
 interface MealPlanWithItems extends MealPlan {
   items: {
     day_of_week: number;
-    recipes: Recipe[];
+    entries: MealPlanItemEntry[];
   }[];
 }
 
@@ -73,12 +78,21 @@ export function MealPlanPage() {
         uniquePlans.map(async (plan) => {
           const { data: items } = await supabase
             .from('meal_plan_items')
-            .select('day_of_week, recipes(*)')
+            .select('id, day_of_week, recipes(*)')
             .eq('meal_plan_id', plan.id);
 
           const groupedItems = Array(7).fill(null).map((_, i) => ({
             day_of_week: i,
-            recipes: items?.filter(item => item.day_of_week === i).map(item => item.recipes).flat() || []
+            entries: (items || [])
+              .filter((item: { day_of_week: number }) => item.day_of_week === i)
+              .flatMap((item: { id: string; recipes: Recipe | Recipe[] | null }) => {
+                const recipeList = Array.isArray(item.recipes)
+                  ? item.recipes
+                  : item.recipes
+                    ? [item.recipes]
+                    : [];
+                return recipeList.map((recipe) => ({ itemId: item.id, recipe }));
+              }),
           }));
 
           return { ...plan, items: groupedItems };
@@ -169,15 +183,15 @@ export function MealPlanPage() {
                       <div className="flex items-start justify-between gap-2 mb-3 sm:mb-4">
                         <h3 className="text-base sm:text-lg font-bold text-gray-900">{day}</h3>
                         <span className="text-xs sm:text-sm bg-blue-100 text-blue-800 px-2 sm:px-3 py-1 rounded-full font-medium whitespace-nowrap">
-                          {selectedPlan.items[idx]?.recipes.length || 0} recipe{(selectedPlan.items[idx]?.recipes.length || 0) !== 1 ? 's' : ''}
+                          {selectedPlan.items[idx]?.entries.length || 0} recipe{(selectedPlan.items[idx]?.entries.length || 0) !== 1 ? 's' : ''}
                         </span>
                       </div>
 
                       <div className="space-y-2">
-                        {selectedPlan.items[idx]?.recipes.length > 0 && (
+                        {(selectedPlan.items[idx]?.entries.length || 0) > 0 && (
                           <>
-                            {selectedPlan.items[idx]?.recipes.map((recipe) => (
-                              <div key={recipe.id} className="bg-blue-50 p-4 rounded-lg flex justify-between items-start gap-3 border border-blue-100">
+                            {selectedPlan.items[idx]?.entries.map(({ itemId, recipe }) => (
+                              <div key={itemId} className="bg-blue-50 p-4 rounded-lg flex justify-between items-start gap-3 border border-blue-100">
                                 <button
                                   onClick={() => navigate(`/recipe/${recipe.id}`, { state: { fromMealPlan: true } })}
                                   className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left flex-1"
@@ -186,22 +200,18 @@ export function MealPlanPage() {
                                 </button>
                                 <button
                                   onClick={async () => {
-                                    const { data: items } = await supabase
+                                    const { error } = await supabase
                                       .from('meal_plan_items')
-                                      .select('id')
-                                      .eq('meal_plan_id', selectedPlan.id)
-                                      .eq('recipe_id', recipe.id)
-                                      .eq('day_of_week', idx)
-                                      .maybeSingle();
-                                    if (items?.id) {
-                                      await supabase
-                                        .from('meal_plan_items')
-                                        .delete()
-                                        .eq('id', items.id);
-                                      await fetchMealPlans();
+                                      .delete()
+                                      .eq('id', itemId);
+                                    if (error) {
+                                      console.error('Error deleting meal plan item:', error);
+                                      return;
                                     }
+                                    await fetchMealPlans();
                                   }}
                                   className="text-red-500 hover:text-red-700 flex-shrink-0"
+                                  aria-label={`Remove ${recipe.title}`}
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </button>
