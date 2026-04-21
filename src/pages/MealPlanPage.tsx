@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, Plus } from 'lucide-react';
 import { supabase, type MealPlan, type Recipe } from '../lib/supabase';
+import { ensureMealPlanWeeks, cutoffWeekStart, currentWeekStart } from '../lib/mealPlanWeeks';
 
 interface MealPlanWithItems extends MealPlan {
   items: {
@@ -21,7 +22,10 @@ export function MealPlanPage() {
   const [openDropdownDay, setOpenDropdownDay] = useState<number | null>(null);
 
   useEffect(() => {
-    fetchMealPlans();
+    (async () => {
+      await ensureMealPlanWeeks();
+      await fetchMealPlans();
+    })();
     fetchRecipes();
   }, []);
 
@@ -44,18 +48,21 @@ export function MealPlanPage() {
       const { data, error } = await supabase
         .from('meal_plans')
         .select('*')
-        .order('week_start_date', { ascending: false });
+        .order('week_start_date', { ascending: true });
 
       if (error) throw error;
 
+      const cutoff = cutoffWeekStart();
       const seenWeeks = new Set<string>();
-      const uniquePlans = (data || []).filter(plan => {
-        if (seenWeeks.has(plan.week_start_date)) {
-          return false;
-        }
-        seenWeeks.add(plan.week_start_date);
-        return true;
-      });
+      const uniquePlans = (data || [])
+        .filter(plan => plan.week_start_date >= cutoff)
+        .filter(plan => {
+          if (seenWeeks.has(plan.week_start_date)) {
+            return false;
+          }
+          seenWeeks.add(plan.week_start_date);
+          return true;
+        });
 
       const plansWithItems = await Promise.all(
         uniquePlans.map(async (plan) => {
@@ -75,7 +82,9 @@ export function MealPlanPage() {
 
       setMealPlans(plansWithItems);
       if (plansWithItems.length > 0 && !selectedPlanId) {
-        setSelectedPlanId(plansWithItems[0].id);
+        const thisWeek = currentWeekStart();
+        const current = plansWithItems.find((p) => p.week_start_date === thisWeek);
+        setSelectedPlanId((current ?? plansWithItems[0]).id);
       }
 
       setLoading(false);

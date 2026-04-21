@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { supabase, type MealPlan, type Recipe } from '../lib/supabase';
+import { ensureMealPlanWeeks, cutoffWeekStart, currentWeekStart } from '../lib/mealPlanWeeks';
 
 interface Ingredient {
   name: string;
@@ -137,7 +138,10 @@ export function GroceryListPage() {
   const [isComplete, setIsComplete] = useState(false);
 
   useEffect(() => {
-    fetchMealPlans();
+    (async () => {
+      await ensureMealPlanWeeks();
+      await fetchMealPlans();
+    })();
   }, []);
 
   useEffect(() => {
@@ -166,22 +170,27 @@ export function GroceryListPage() {
       const { data, error } = await supabase
         .from('meal_plans')
         .select('*')
-        .order('week_start_date', { ascending: false });
+        .order('week_start_date', { ascending: true });
 
       if (error) throw error;
 
+      const cutoff = cutoffWeekStart();
       const seenWeeks = new Set<string>();
-      const uniquePlans = (data || []).filter(plan => {
-        if (seenWeeks.has(plan.week_start_date)) return false;
-        seenWeeks.add(plan.week_start_date);
-        return true;
-      });
+      const uniquePlans = (data || [])
+        .filter(plan => plan.week_start_date >= cutoff)
+        .filter(plan => {
+          if (seenWeeks.has(plan.week_start_date)) return false;
+          seenWeeks.add(plan.week_start_date);
+          return true;
+        });
 
       setMealPlans(uniquePlans);
 
       if (uniquePlans.length > 0) {
-        setSelectedMealPlan(uniquePlans[0].id);
-        fetchGroceryList(uniquePlans[0].id);
+        const thisWeek = currentWeekStart();
+        const initial = uniquePlans.find((p) => p.week_start_date === thisWeek) ?? uniquePlans[0];
+        setSelectedMealPlan(initial.id);
+        fetchGroceryList(initial.id);
       }
     } catch (err) {
       console.error('Error fetching meal plans:', err);
