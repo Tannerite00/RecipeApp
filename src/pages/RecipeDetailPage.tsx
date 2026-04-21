@@ -4,6 +4,7 @@ import { ArrowLeft, Plus } from 'lucide-react';
 import { supabase, type Recipe } from '../lib/supabase';
 import { parseISO8601Duration } from '../lib/utils';
 import { StarRating } from '../components/StarRating';
+import { RecipeComments } from '../components/RecipeComments';
 import { cacheGet, cacheSet, enqueueRating } from '../lib/offlineCache';
 import { flushRatingQueue } from '../lib/ratingSync';
 
@@ -271,6 +272,8 @@ export function RecipeDetailPage() {
             </ol>
           </div>
         </div>
+
+        {id && <RecipeComments recipeId={id} />}
       </div>
 
       {showMealPlanModal && (

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Lock, LogOut, Calendar, Check, X } from 'lucide-react';
+import { ArrowLeft, Mail, Lock, LogOut, Calendar, Check, X, MessageCircle, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import { StarRating } from '../components/StarRating';
@@ -29,6 +29,9 @@ export function AccountPage() {
   const [userRatings, setUserRatings] = useState<
     { id: string; rating: number; updated_at: string; recipe: { id: string; title: string; type: string | null } | null }[]
   >([]);
+  const [userComments, setUserComments] = useState<
+    { id: string; content: string; created_at: string; recipe: { id: string; title: string } | null }[]
+  >([]);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -39,6 +42,7 @@ export function AccountPage() {
         return;
       }
       await loadUserRatings(data.user.id);
+      await loadUserComments(data.user.id);
     });
   }, [navigate]);
 
@@ -59,6 +63,32 @@ export function AccountPage() {
     const rows = (data as any) || [];
     setUserRatings(rows);
     cacheSet(cacheKey, rows);
+  }
+
+  async function loadUserComments(uid: string) {
+    const cacheKey = `user-comments:${uid}`;
+    const cached = cacheGet<typeof userComments>(cacheKey);
+    if (cached) setUserComments(cached);
+
+    const { data, error } = await supabase
+      .from('recipe_comments')
+      .select('id, content, created_at, recipe:recipes(id, title)')
+      .eq('user_id', uid)
+      .order('created_at', { ascending: false });
+    if (error) {
+      if (!cached) console.error('Error loading user comments:', error);
+      return;
+    }
+    const rows = (data as any) || [];
+    setUserComments(rows);
+    cacheSet(cacheKey, rows);
+  }
+
+  async function handleDeleteComment(id: string) {
+    const prev = userComments;
+    setUserComments((c) => c.filter((x) => x.id !== id));
+    const { error } = await supabase.from('recipe_comments').delete().eq('id', id);
+    if (error) setUserComments(prev);
   }
 
   const ruleResults = useMemo(
@@ -198,6 +228,63 @@ export function AccountPage() {
                     )}
                   </div>
                   <StarRating value={r.rating} readOnly showCount={false} size="sm" />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 mb-6">
+          <div className="flex items-center gap-2 mb-1">
+            <MessageCircle className="w-5 h-5 text-orange-600" />
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900">Your Comments</h2>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Comments you've posted ({userComments.length})
+          </p>
+          {userComments.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              You haven't commented on any recipes yet.
+            </p>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {userComments.map((c) => (
+                <li key={c.id} className="py-3">
+                  <div className="flex items-start justify-between gap-3 mb-1">
+                    <div className="min-w-0 flex-1">
+                      {c.recipe ? (
+                        <Link
+                          to={`/recipe/${c.recipe.id}`}
+                          className="block text-sm sm:text-base font-medium text-gray-900 hover:text-orange-700 truncate"
+                        >
+                          {c.recipe.title}
+                        </Link>
+                      ) : (
+                        <span className="block text-sm sm:text-base font-medium text-gray-500 italic">
+                          Recipe removed
+                        </span>
+                      )}
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {new Date(c.created_at).toLocaleString(undefined, {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        })}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteComment(c.id)}
+                      className="text-gray-400 hover:text-red-600 transition-colors p-1 flex-shrink-0"
+                      aria-label="Delete comment"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">
+                    {c.content}
+                  </p>
                 </li>
               ))}
             </ul>

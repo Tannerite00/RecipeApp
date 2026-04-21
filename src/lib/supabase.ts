@@ -47,3 +47,18 @@ export interface RatingStats {
   average: number;
   count: number;
 }
+
+export interface RecipeComment {
+  id: string;
+  user_id: string;
+  recipe_id: string;
+  user_email: string;
+  content: string;
+  created_at: string;
+}
+
+export function usernameFromEmail(email: string | null | undefined): string {
+  if (!email) return 'User';
+  const prefix = email.split('@')[0];
+  return prefix || 'User';
+}
