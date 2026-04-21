@@ -4,7 +4,7 @@ import { Search, X } from 'lucide-react';
 import { supabase, type Recipe } from '../lib/supabase';
 import { parseISO8601Duration } from '../lib/utils';
 import { StarRating } from '../components/StarRating';
-import { cacheGet, cacheSet } from '../lib/offlineCache';
+import { cacheGet, cacheSet, loadBundledRecipes } from '../lib/offlineCache';
 
 export function RecipeListPage() {
   const navigate = useNavigate();
@@ -48,7 +48,19 @@ export function RecipeListPage() {
       );
       cacheSet('recipes', recipes);
     } catch (err) {
-      if (!cached) console.error('Error fetching recipes:', err);
+      if (!cached) {
+        const bundled = await loadBundledRecipes();
+        if (bundled && bundled.length) {
+          setRecipes(bundled as Recipe[]);
+          setFilteredRecipes(bundled as Recipe[]);
+          setRecipeTypes(
+            Array.from(new Set((bundled as Recipe[]).map((r) => r.type).filter(Boolean))).sort()
+          );
+          cacheSet('recipes', bundled);
+        } else {
+          console.error('Error fetching recipes:', err);
+        }
+      }
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,6 @@
 // RecipeHub service worker — caches the app shell so the UI loads offline.
-const CACHE = 'recipehub-shell-v1';
-const SHELL = ['/', '/index.html'];
+const CACHE = 'recipehub-shell-v2';
+const SHELL = ['/', '/index.html', '/recipes.json'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
