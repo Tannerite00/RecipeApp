@@ -1,9 +1,23 @@
-import { ChefHat, LogIn } from 'lucide-react';
+import { ChefHat, LogIn, CircleUser as UserCircle2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
+import type { Session } from '@supabase/supabase-js';
 
 export function Navigation() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [session, setSession] = useState<Session | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -49,17 +63,31 @@ export function Navigation() {
               <span className="sm:hidden">Grocery</span>
               <span className="hidden sm:inline">Grocery List</span>
             </button>
-            <button
-              onClick={() => navigate('/auth')}
-              className={`ml-1 sm:ml-2 flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-base font-medium transition ${
-                isActive('/auth')
-                  ? 'bg-orange-700 text-white'
-                  : 'bg-orange-600 text-white hover:bg-orange-700'
-              }`}
-            >
-              <LogIn className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span>Login</span>
-            </button>
+            {session ? (
+              <button
+                onClick={() => navigate('/account')}
+                className={`ml-1 sm:ml-2 flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-base font-medium transition ${
+                  isActive('/account')
+                    ? 'bg-orange-700 text-white'
+                    : 'bg-orange-600 text-white hover:bg-orange-700'
+                }`}
+              >
+                <UserCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span>Account</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate('/auth')}
+                className={`ml-1 sm:ml-2 flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-base font-medium transition ${
+                  isActive('/auth')
+                    ? 'bg-orange-700 text-white'
+                    : 'bg-orange-600 text-white hover:bg-orange-700'
+                }`}
+              >
+                <LogIn className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span>Login</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
