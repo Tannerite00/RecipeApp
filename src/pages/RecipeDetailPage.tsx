@@ -4,6 +4,8 @@ import { ArrowLeft, Plus } from 'lucide-react';
 import { supabase, type Recipe } from '../lib/supabase';
 import { parseISO8601Duration } from '../lib/utils';
 import { StarRating } from '../components/StarRating';
+import { cacheGet, cacheSet, enqueueRating } from '../lib/offlineCache';
+import { flushRatingQueue } from '../lib/ratingSync';
 
 export function RecipeDetailPage() {
   const { id } = useParams();
@@ -33,6 +35,16 @@ export function RecipeDetailPage() {
 
   async function loadRatings() {
     if (!id) return;
+
+    const cachedStats = cacheGet<Record<string, { average: number; count: number }>>(
+      'rating-stats'
+    );
+    if (cachedStats?.[id]) {
+      setRatingAverage(cachedStats[id].average);
+      setRatingCount(cachedStats[id].count);
+    }
+    const cachedUser = cacheGet<Record<string, number>>('my-ratings');
+
     try {
       const { data: userData } = await supabase.auth.getUser();
       const uid = userData.user?.id ?? null;
@@ -56,8 +68,10 @@ export function RecipeDetailPage() {
       } else {
         setUserRating(null);
       }
-    } catch (err) {
-      console.error('Error loading ratings:', err);
+    } catch {
+      if (cachedUser && cachedUser[id] !== undefined) {
+        setUserRating(cachedUser[id]);
+      }
     }
   }
 
@@ -68,22 +82,41 @@ export function RecipeDetailPage() {
       return;
     }
     if (!id) return;
+
+    setUserRating(rating);
+    const myCache = cacheGet<Record<string, number>>('my-ratings') || {};
+    myCache[id] = rating;
+    cacheSet('my-ratings', myCache);
+
+    const entry = {
+      user_id: currentUserId,
+      recipe_id: id,
+      rating,
+      updated_at: new Date().toISOString(),
+    };
+
     try {
       const { error } = await supabase
         .from('recipe_ratings')
-        .upsert(
-          { user_id: currentUserId, recipe_id: id, rating, updated_at: new Date().toISOString() },
-          { onConflict: 'user_id,recipe_id' }
-        );
+        .upsert(entry, { onConflict: 'user_id,recipe_id' });
       if (error) throw error;
+      await flushRatingQueue();
       await loadRatings();
       setRatingMessage('Thanks for rating!');
-    } catch (err: any) {
-      setRatingMessage(err.message || 'Failed to save your rating.');
+    } catch {
+      enqueueRating(entry);
+      setRatingMessage("You're offline. Your rating will sync when you reconnect.");
     }
   }
 
   async function fetchRecipe() {
+    const cached = cacheGet<Recipe[]>('recipes');
+    const cachedMatch = cached?.find((r) => r.id === id) ?? null;
+    if (cachedMatch) {
+      setRecipe(cachedMatch);
+      setLoading(false);
+    }
+
     try {
       const { data, error } = await supabase
         .from('recipes')
@@ -92,9 +125,9 @@ export function RecipeDetailPage() {
         .maybeSingle();
 
       if (error) throw error;
-      setRecipe(data);
+      if (data) setRecipe(data);
     } catch (err) {
-      console.error('Error fetching recipe:', err);
+      if (!cachedMatch) console.error('Error fetching recipe:', err);
     } finally {
       setLoading(false);
     }

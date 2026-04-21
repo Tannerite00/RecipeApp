@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import { StarRating } from '../components/StarRating';
 import { Link } from 'react-router-dom';
+import { cacheGet, cacheSet } from '../lib/offlineCache';
 
 const SPECIAL_CHARS = /[`!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/;
 
@@ -41,16 +42,22 @@ export function AccountPage() {
   }, [navigate]);
 
   async function loadUserRatings(uid: string) {
+    const cacheKey = `user-ratings:${uid}`;
+    const cached = cacheGet<typeof userRatings>(cacheKey);
+    if (cached) setUserRatings(cached);
+
     const { data, error } = await supabase
       .from('recipe_ratings')
       .select('id, rating, updated_at, recipe:recipes(id, title, type)')
       .eq('user_id', uid)
       .order('updated_at', { ascending: false });
     if (error) {
-      console.error('Error loading user ratings:', error);
+      if (!cached) console.error('Error loading user ratings:', error);
       return;
     }
-    setUserRatings((data as any) || []);
+    const rows = (data as any) || [];
+    setUserRatings(rows);
+    cacheSet(cacheKey, rows);
   }
 
   const ruleResults = useMemo(

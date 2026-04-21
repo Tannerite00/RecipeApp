@@ -4,6 +4,7 @@ import { Search, X } from 'lucide-react';
 import { supabase, type Recipe } from '../lib/supabase';
 import { parseISO8601Duration } from '../lib/utils';
 import { StarRating } from '../components/StarRating';
+import { cacheGet, cacheSet } from '../lib/offlineCache';
 
 export function RecipeListPage() {
   const navigate = useNavigate();
@@ -22,6 +23,16 @@ export function RecipeListPage() {
   }, []);
 
   async function fetchRecipes() {
+    const cached = cacheGet<Recipe[]>('recipes');
+    if (cached && cached.length) {
+      setRecipes(cached);
+      setFilteredRecipes(cached);
+      setRecipeTypes(
+        Array.from(new Set(cached.map((r) => r.type).filter(Boolean))).sort()
+      );
+      setLoading(false);
+    }
+
     try {
       const { data, error } = await supabase
         .from('recipes')
@@ -29,19 +40,26 @@ export function RecipeListPage() {
         .order('title');
 
       if (error) throw error;
-      setRecipes(data || []);
-      setFilteredRecipes(data || []);
-
-      const types = Array.from(new Set((data || []).map(r => r.type).filter(Boolean))).sort();
-      setRecipeTypes(types);
+      const recipes = data || [];
+      setRecipes(recipes);
+      setFilteredRecipes(recipes);
+      setRecipeTypes(
+        Array.from(new Set(recipes.map((r) => r.type).filter(Boolean))).sort()
+      );
+      cacheSet('recipes', recipes);
     } catch (err) {
-      console.error('Error fetching recipes:', err);
+      if (!cached) console.error('Error fetching recipes:', err);
     } finally {
       setLoading(false);
     }
   }
 
   async function fetchRatingStats() {
+    const cached = cacheGet<Record<string, { average: number; count: number }>>(
+      'rating-stats'
+    );
+    if (cached) setRatingStats(cached);
+
     try {
       const { data, error } = await supabase
         .from('recipe_ratings')
@@ -60,8 +78,9 @@ export function RecipeListPage() {
         stats[id] = { average: v.count ? v.total / v.count : 0, count: v.count };
       });
       setRatingStats(stats);
+      cacheSet('rating-stats', stats);
     } catch (err) {
-      console.error('Error fetching rating stats:', err);
+      if (!cached) console.error('Error fetching rating stats:', err);
     }
   }
 
