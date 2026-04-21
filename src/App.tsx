@@ -4,6 +4,7 @@ import { RecipeListPage } from './pages/RecipeListPage';
 import { RecipeDetailPage } from './pages/RecipeDetailPage';
 import { MealPlanPage } from './pages/MealPlanPage';
 import { GroceryListPage } from './pages/GroceryListPage';
+import { AuthPage } from './pages/AuthPage';
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
           <Route path="/recipe/:id" element={<RecipeDetailPage />} />
           <Route path="/meal-plans" element={<MealPlanPage />} />
           <Route path="/grocery-list" element={<GroceryListPage />} />
+          <Route path="/auth" element={<AuthPage />} />
         </Routes>
       </div>
     </BrowserRouter>

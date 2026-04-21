@@ -1,4 +1,4 @@
-import { ChefHat } from 'lucide-react';
+import { ChefHat, LogIn } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 export function Navigation() {
@@ -48,6 +48,17 @@ export function Navigation() {
             >
               <span className="sm:hidden">Grocery</span>
               <span className="hidden sm:inline">Grocery List</span>
+            </button>
+            <button
+              onClick={() => navigate('/auth')}
+              className={`ml-1 sm:ml-2 flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-base font-medium transition ${
+                isActive('/auth')
+                  ? 'bg-orange-700 text-white'
+                  : 'bg-orange-600 text-white hover:bg-orange-700'
+              }`}
+            >
+              <LogIn className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span>Login</span>
             </button>
           </div>
         </div>
