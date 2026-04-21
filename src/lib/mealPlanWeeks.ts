@@ -3,12 +3,10 @@ import { supabase } from './supabase';
 const WEEKS_AHEAD = 2;
 const WEEKS_RETAINED = 8;
 
-export function startOfWeekMonday(d: Date = new Date()): Date {
+export function startOfWeekSunday(d: Date = new Date()): Date {
   const date = new Date(d);
   date.setHours(0, 0, 0, 0);
-  const day = date.getDay();
-  const delta = day === 0 ? -6 : 1 - day;
-  date.setDate(date.getDate() + delta);
+  date.setDate(date.getDate() - date.getDay());
   return date;
 }
 
@@ -20,7 +18,7 @@ export function toDateString(d: Date): string {
 }
 
 export function plannableWeekStarts(now: Date = new Date()): string[] {
-  const base = startOfWeekMonday(now);
+  const base = startOfWeekSunday(now);
   const weeks: string[] = [];
   for (let i = 0; i <= WEEKS_AHEAD; i++) {
     const d = new Date(base);
@@ -31,13 +29,13 @@ export function plannableWeekStarts(now: Date = new Date()): string[] {
 }
 
 export function cutoffWeekStart(now: Date = new Date()): string {
-  const base = startOfWeekMonday(now);
+  const base = startOfWeekSunday(now);
   base.setDate(base.getDate() - 7 * WEEKS_RETAINED);
   return toDateString(base);
 }
 
 export function currentWeekStart(now: Date = new Date()): string {
-  return toDateString(startOfWeekMonday(now));
+  return toDateString(startOfWeekSunday(now));
 }
 
 export async function ensureMealPlanWeeks(): Promise<void> {

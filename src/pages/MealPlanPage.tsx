@@ -11,7 +11,7 @@ interface MealPlanWithItems extends MealPlan {
   }[];
 }
 
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export function MealPlanPage() {
   const navigate = useNavigate();

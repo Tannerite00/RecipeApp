@@ -177,7 +177,7 @@ export function RecipeDetailPage() {
   function formatDayOption(weekStart: string, offset: number): string {
     const [y, m, d] = weekStart.split('-').map(Number);
     const date = new Date(y, m - 1, d + offset);
-    const dayName = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][offset];
+    const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][offset];
     return `${dayName}, ${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
   }
 
