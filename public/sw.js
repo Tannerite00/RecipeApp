@@ -1,6 +1,12 @@
-// RecipeHub service worker — caches the app shell so the UI loads offline.
-const CACHE = 'recipehub-shell-v2';
-const SHELL = ['/', '/index.html', '/recipes.json'];
+const CACHE = 'recipehub-shell-v3';
+const SHELL = [
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/icon.svg',
+  '/icon-192.svg',
+  '/recipes.json',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
@@ -21,8 +27,6 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
-  // Never intercept Supabase or other cross-origin API calls; let them go
-  // direct to the network so the app can handle offline errors itself.
   if (url.origin !== self.location.origin) return;
 
   event.respondWith(
@@ -35,7 +39,11 @@ self.addEventListener('fetch', (event) => {
           }
           return res;
         })
-        .catch(() => cached || caches.match('/index.html'));
+        .catch(() => {
+          if (cached) return cached;
+          if (req.mode === 'navigate') return caches.match('/index.html');
+          return new Response('', { status: 503 });
+        });
       return cached || fetchPromise;
     })
   );
