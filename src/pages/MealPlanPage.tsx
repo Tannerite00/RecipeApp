@@ -43,7 +43,7 @@ export function MealPlanPage() {
     try {
       const { data, error } = await supabase
         .from('recipes')
-        .select('id, title') // ✅ reduced payload
+        .select('id, title') 
         .order('title');
 
       if (error) throw error;
@@ -75,7 +75,7 @@ export function MealPlanPage() {
 
       const planIds = uniquePlans.map(p => p.id);
 
-      // ❌ OLD: N+1 queries per plan removed
+
       const { data: items } = await supabase
         .from('meal_plan_items')
         .select('id, day_of_week, meal_plan_id, recipe_id, recipes(*)')
@@ -112,7 +112,6 @@ export function MealPlanPage() {
     }
   }
 
-  // 🔥 ONLY CHANGE: optimistic update instead of refetch
   async function addRecipeToDay(mealPlanId: string, recipeId: string, dayOfWeek: number) {
     try {
       const { data, error } = await supabase
@@ -154,7 +153,6 @@ export function MealPlanPage() {
     }
   }
 
-  // 🔥 ONLY CHANGE: remove full refetch
   async function deleteMealPlanItem(itemId: string, mealPlanId: string, dayOfWeek: number) {
     try {
       const { error } = await supabase
