@@ -3,8 +3,10 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { installRatingSync } from './lib/ratingSync';
+import { installMealPlanSync } from './lib/mealPlanSync';
 
 installRatingSync();
+installMealPlanSync();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

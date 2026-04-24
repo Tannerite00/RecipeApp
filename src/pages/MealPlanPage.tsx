@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, Plus } from 'lucide-react';
 import { supabase, type MealPlan, type Recipe } from '../lib/supabase';
-import { ensureMealPlanWeeks, cutoffWeekStart, currentWeekStart } from '../lib/mealPlanWeeks';
-import { cacheGet, cacheSet } from '../lib/offlineCache';
+import { ensureMealPlanWeeks, cutoffWeekStart, currentWeekStart, plannableWeekStarts } from '../lib/mealPlanWeeks';
+import { cacheGet, cacheSet, enqueueMealPlanOp } from '../lib/offlineCache';
+import { flushMealPlanQueue } from '../lib/mealPlanSync';
 
 interface MealPlanItemEntry {
   itemId: string;
@@ -18,6 +19,13 @@ interface MealPlanWithItems extends MealPlan {
 }
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+function emptyWeekItems() {
+  return Array(7).fill(null).map((_, day) => ({
+    day_of_week: day,
+    entries: [] as MealPlanItemEntry[],
+  }));
+}
 
 function formatWeekStart(weekStart: string): string {
   const [y, m, d] = weekStart.split('-').map(Number);
@@ -40,6 +48,34 @@ function saveRecipesToCache(recipes: Pick<Recipe, 'id' | 'title'>[]): void {
   cacheSet('meal-plan-recipes', recipes);
 }
 
+function ensureCachedPlansHaveCurrentWeeks(cached: MealPlanWithItems[]): MealPlanWithItems[] {
+  const cutoff = cutoffWeekStart();
+  const target = plannableWeekStarts();
+  const plans = cached.filter((p) => p.week_start_date >= cutoff);
+  const have = new Set(plans.map((p) => p.week_start_date));
+
+  for (const w of target) {
+    if (!have.has(w)) {
+      plans.push({
+        id: `offline-${w}`,
+        user_id: '',
+        week_start_date: w,
+        created_at: new Date().toISOString(),
+        items: emptyWeekItems(),
+      });
+    }
+  }
+
+  plans.sort((a, b) => a.week_start_date.localeCompare(b.week_start_date));
+
+  const seen = new Set<string>();
+  return plans.filter((p) => {
+    if (seen.has(p.week_start_date)) return false;
+    seen.add(p.week_start_date);
+    return true;
+  });
+}
+
 export function MealPlanPage() {
   const navigate = useNavigate();
   const [mealPlans, setMealPlans] = useState<MealPlanWithItems[]>([]);
@@ -49,15 +85,27 @@ export function MealPlanPage() {
   const [openDropdownDay, setOpenDropdownDay] = useState<number | null>(null);
 
   useEffect(() => {
-    const cachedPlans = loadMealPlansFromCache();
+    let cachedPlans = loadMealPlansFromCache();
     if (cachedPlans && cachedPlans.length) {
+      cachedPlans = ensureCachedPlansHaveCurrentWeeks(cachedPlans);
       setMealPlans(cachedPlans);
+      saveMealPlansToCache(cachedPlans);
       if (!selectedPlanId) {
         const thisWeek = currentWeekStart();
         const current = cachedPlans.find(p => p.week_start_date === thisWeek);
         setSelectedPlanId((current ?? cachedPlans[0]).id);
       }
       setLoading(false);
+    } else {
+      const fallback = ensureCachedPlansHaveCurrentWeeks([]);
+      if (fallback.length) {
+        setMealPlans(fallback);
+        saveMealPlansToCache(fallback);
+        const thisWeek = currentWeekStart();
+        const current = fallback.find(p => p.week_start_date === thisWeek);
+        setSelectedPlanId((current ?? fallback[0]).id);
+        setLoading(false);
+      }
     }
 
     const cachedRecipes = loadRecipesFromCache();
@@ -112,13 +160,12 @@ export function MealPlanPage() {
 
       const planIds = uniquePlans.map(p => p.id);
 
-
       const { data: items } = await supabase
         .from('meal_plan_items')
         .select('id, day_of_week, meal_plan_id, recipe_id, recipes(*)')
         .in('meal_plan_id', planIds);
 
-      const groupedPlans = uniquePlans.map(plan => {
+      const groupedPlans: MealPlanWithItems[] = uniquePlans.map(plan => {
         const planItems = (items || []).filter(i => i.meal_plan_id === plan.id);
 
         const groupedDays = Array(7).fill(null).map((_, day) => ({
@@ -134,16 +181,31 @@ export function MealPlanPage() {
         return { ...plan, items: groupedDays };
       });
 
-      setMealPlans(groupedPlans);
-      saveMealPlansToCache(groupedPlans);
+      const withCurrentWeeks = ensureCachedPlansHaveCurrentWeeks(groupedPlans);
 
-      if (groupedPlans.length > 0 && !selectedPlanId) {
+      setMealPlans(withCurrentWeeks);
+      saveMealPlansToCache(withCurrentWeeks);
+
+      const idMap = new Map<string, string>();
+      for (const plan of withCurrentWeeks) {
+        if (!plan.id.startsWith('offline-')) {
+          idMap.set(plan.week_start_date, plan.id);
+        }
+      }
+      cacheSet('detail-meal-plans', withCurrentWeeks.map(p => ({
+        id: p.id,
+        week_start_date: p.week_start_date,
+      })));
+
+      if (withCurrentWeeks.length > 0 && !selectedPlanId) {
         const thisWeek = currentWeekStart();
-        const current = groupedPlans.find(p => p.week_start_date === thisWeek);
-        setSelectedPlanId((current ?? groupedPlans[0]).id);
+        const current = withCurrentWeeks.find(p => p.week_start_date === thisWeek);
+        setSelectedPlanId((current ?? withCurrentWeeks[0]).id);
       }
 
       setLoading(false);
+
+      await flushMealPlanQueue();
     } catch (err) {
       console.error('Error fetching meal plans:', err);
       setLoading(false);
@@ -180,10 +242,16 @@ export function MealPlanPage() {
     setOpenDropdownDay(null);
 
     try {
+      const realMealPlanId = mealPlanId.startsWith('offline-')
+        ? await resolveOfflinePlanId(mealPlanId)
+        : mealPlanId;
+
+      if (!realMealPlanId) throw new Error('offline');
+
       const { data, error } = await supabase
         .from('meal_plan_items')
         .insert({
-          meal_plan_id: mealPlanId,
+          meal_plan_id: realMealPlanId,
           recipe_id: recipeId,
           day_of_week: dayOfWeek
         })
@@ -212,8 +280,15 @@ export function MealPlanPage() {
         saveMealPlansToCache(updated);
         return updated;
       });
-    } catch (err) {
-      console.error('Error adding recipe to day:', err);
+    } catch {
+      enqueueMealPlanOp({
+        kind: 'add',
+        tempId,
+        mealPlanId,
+        recipeId,
+        dayOfWeek,
+        createdAt: new Date().toISOString(),
+      });
     }
   }
 
@@ -235,6 +310,15 @@ export function MealPlanPage() {
       return updated;
     });
 
+    if (itemId.startsWith('temp-')) {
+      enqueueMealPlanOp({
+        kind: 'delete',
+        itemId,
+        createdAt: new Date().toISOString(),
+      });
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('meal_plan_items')
@@ -242,8 +326,12 @@ export function MealPlanPage() {
         .eq('id', itemId);
 
       if (error) throw error;
-    } catch (err) {
-      console.error('Error deleting meal plan item:', err);
+    } catch {
+      enqueueMealPlanOp({
+        kind: 'delete',
+        itemId,
+        createdAt: new Date().toISOString(),
+      });
     }
   }
 
@@ -368,4 +456,27 @@ export function MealPlanPage() {
       </div>
     </div>
   );
+}
+
+async function resolveOfflinePlanId(offlineId: string): Promise<string | null> {
+  const weekStart = offlineId.replace('offline-', '');
+  try {
+    const { data: plans } = await supabase
+      .from('meal_plans')
+      .select('id')
+      .eq('week_start_date', weekStart)
+      .limit(1);
+
+    if (plans && plans.length) return plans[0].id;
+
+    const { data: created } = await supabase
+      .from('meal_plans')
+      .insert({ week_start_date: weekStart })
+      .select('id')
+      .single();
+
+    return created?.id ?? null;
+  } catch {
+    return null;
+  }
 }

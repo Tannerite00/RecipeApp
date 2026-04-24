@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { supabase, type MealPlan, type Recipe } from '../lib/supabase';
-import { ensureMealPlanWeeks, cutoffWeekStart, currentWeekStart } from '../lib/mealPlanWeeks';
+import { ensureMealPlanWeeks, cutoffWeekStart, currentWeekStart, getOfflineMealPlans } from '../lib/mealPlanWeeks';
 import { cacheGet, cacheSet } from '../lib/offlineCache';
 
 interface Ingredient {
@@ -156,6 +156,15 @@ export function GroceryListPage() {
         setGroceryItems(cachedGrocery);
       }
       setLoading(false);
+    } else {
+      const offlinePlans = getOfflineMealPlans();
+      if (offlinePlans.length) {
+        setMealPlans(offlinePlans as MealPlan[]);
+        const thisWeek = currentWeekStart();
+        const initial = offlinePlans.find(p => p.week_start_date === thisWeek) ?? offlinePlans[0];
+        setSelectedMealPlan(initial.id);
+        setLoading(false);
+      }
     }
 
     (async () => {

@@ -5,8 +5,8 @@ import { supabase, type Recipe } from '../lib/supabase';
 import { parseISO8601Duration } from '../lib/utils';
 import { StarRating } from '../components/StarRating';
 import { RecipeComments } from '../components/RecipeComments';
-import { ensureMealPlanWeeks, cutoffWeekStart, currentWeekStart } from '../lib/mealPlanWeeks';
-import { cacheGet, cacheSet, enqueueRating } from '../lib/offlineCache';
+import { ensureMealPlanWeeks, cutoffWeekStart, currentWeekStart, getOfflineMealPlans } from '../lib/mealPlanWeeks';
+import { cacheGet, cacheSet, enqueueRating, enqueueMealPlanOp } from '../lib/offlineCache';
 import { flushRatingQueue } from '../lib/ratingSync';
 
 export function RecipeDetailPage() {
@@ -23,6 +23,7 @@ export function RecipeDetailPage() {
   const [ratingCount, setRatingCount] = useState(0);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [ratingMessage, setRatingMessage] = useState<string | null>(null);
+  const [addedMessage, setAddedMessage] = useState<string | null>(null);
 
   const isFromMealPlan = location.state?.fromMealPlan === true;
   const backPath = isFromMealPlan ? '/meal-plans' : '/';
@@ -123,11 +124,11 @@ export function RecipeDetailPage() {
   }
 
   async function fetchMealPlans() {
-    const cached = cacheGet<{ id: string; week_start_date: string }[]>('detail-meal-plans');
-    if (cached && cached.length) {
-      setMealPlans(cached);
+    const offlinePlans = getOfflineMealPlans();
+    if (offlinePlans.length) {
+      setMealPlans(offlinePlans);
       const thisWeek = currentWeekStart();
-      const initial = cached.find((p) => p.week_start_date === thisWeek) ?? cached[0];
+      const initial = offlinePlans.find((p) => p.week_start_date === thisWeek) ?? offlinePlans[0];
       setSelectedMealPlan(initial.id);
     }
 
@@ -158,19 +159,44 @@ export function RecipeDetailPage() {
         const initial = unique.find((p) => p.week_start_date === thisWeek) ?? unique[0];
         setSelectedMealPlan(initial.id);
       }
-    } catch (err) {
-      if (!cached) console.error('Error fetching meal plans:', err);
+    } catch {
+      // keep offline plans
     }
   }
 
   async function addToMealPlan() {
     if (!selectedMealPlan || selectedDayIndex === '' || !id) return;
 
+    setAddedMessage(null);
+
     try {
+      let realPlanId = selectedMealPlan;
+
+      if (selectedMealPlan.startsWith('offline-')) {
+        const weekStart = selectedMealPlan.replace('offline-', '');
+        const { data: plans } = await supabase
+          .from('meal_plans')
+          .select('id')
+          .eq('week_start_date', weekStart)
+          .limit(1);
+
+        if (plans && plans.length) {
+          realPlanId = plans[0].id;
+        } else {
+          const { data: created } = await supabase
+            .from('meal_plans')
+            .insert({ week_start_date: weekStart })
+            .select('id')
+            .single();
+          if (created) realPlanId = created.id;
+          else throw new Error('offline');
+        }
+      }
+
       const { error } = await supabase
         .from('meal_plan_items')
         .insert({
-          meal_plan_id: selectedMealPlan,
+          meal_plan_id: realPlanId,
           recipe_id: id,
           day_of_week: selectedDayIndex
         });
@@ -178,8 +204,36 @@ export function RecipeDetailPage() {
       if (error) throw error;
       setShowMealPlanModal(false);
       setSelectedDayIndex('');
-    } catch (err) {
-      console.error('Error adding to meal plan:', err);
+      setAddedMessage(null);
+    } catch {
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      enqueueMealPlanOp({
+        kind: 'add',
+        tempId,
+        mealPlanId: selectedMealPlan,
+        recipeId: id,
+        dayOfWeek: selectedDayIndex as number,
+        createdAt: new Date().toISOString(),
+      });
+
+      const cachedPlans = cacheGet<any[]>('meal-plans');
+      if (cachedPlans) {
+        const plan = cachedPlans.find((p: any) => p.id === selectedMealPlan);
+        if (plan && plan.items) {
+          const day = selectedDayIndex as number;
+          const cachedRecipes = cacheGet<Recipe[]>('recipes');
+          const matchedRecipe = cachedRecipes?.find((r) => r.id === id);
+          plan.items[day].entries.push({
+            itemId: tempId,
+            recipe: matchedRecipe ?? { id, title: recipe?.title ?? '' },
+          });
+          cacheSet('meal-plans', cachedPlans);
+        }
+      }
+
+      setShowMealPlanModal(false);
+      setSelectedDayIndex('');
+      setAddedMessage('Added offline. It will sync when you reconnect.');
     }
   }
 
@@ -228,6 +282,9 @@ export function RecipeDetailPage() {
               <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
               Add to Meal Plan
             </button>
+            {addedMessage && (
+              <p className="mt-2 text-sm text-amber-600">{addedMessage}</p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8 pb-6 sm:pb-8 border-b border-gray-200">
@@ -279,7 +336,7 @@ export function RecipeDetailPage() {
                 const cleaned = ingredient.trim().replace(/<[^>]*>/g, '');
                 return cleaned ? (
                   <li key={idx} className="flex items-start gap-3 text-gray-700">
-                    <span className="text-orange-600 font-bold mt-1">•</span>
+                    <span className="text-orange-600 font-bold mt-1">&#8226;</span>
                     <span>{cleaned}</span>
                   </li>
                 ) : null;
@@ -317,109 +374,80 @@ export function RecipeDetailPage() {
                 }}
                 className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
               >
-                ×
+                &times;
               </button>
             </div>
 
-            {mealPlans.length === 0 ? (
-              <div>
-                <p className="text-gray-600 mb-6">
-                  You need to create a meal plan first. Go to the Meal Plan page to get started.
-                </p>
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => {
-                      setShowMealPlanModal(false);
-                      setSelectedDate('');
-                    }}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50"
-                  >
-                    Close
-                  </button>
-                  <button
-                    onClick={() => {
-                      navigate('/meal-plans');
-                      setShowMealPlanModal(false);
-                      setSelectedDate('');
-                    }}
-                    className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700"
-                  >
-                    Go to Meal Plans
-                  </button>
-                </div>
+            <>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Meal Plan
+                </label>
+                <select
+                  value={selectedMealPlan}
+                  onChange={(e) => {
+                    setSelectedMealPlan(e.target.value);
+                    setSelectedDayIndex('');
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                >
+                  {mealPlans.map((plan) => {
+                    const [y, m, d] = plan.week_start_date.split('-').map(Number);
+                    const dt = new Date(y, m - 1, d);
+                    return (
+                      <option key={plan.id} value={plan.id}>
+                        Week of {dt.toLocaleDateString()}
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
-            ) : (
-              <>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Meal Plan
-                  </label>
-                  <select
-                    value={selectedMealPlan}
-                    onChange={(e) => {
-                      setSelectedMealPlan(e.target.value);
-                      setSelectedDayIndex('');
-                    }}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  >
-                    {mealPlans.map((plan) => {
-                      const [y, m, d] = plan.week_start_date.split('-').map(Number);
-                      const dt = new Date(y, m - 1, d);
-                      return (
-                        <option key={plan.id} value={plan.id}>
-                          Week of {dt.toLocaleDateString()}
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Day
+                </label>
+                <select
+                  value={selectedDayIndex === '' ? '' : String(selectedDayIndex)}
+                  onChange={(e) =>
+                    setSelectedDayIndex(e.target.value === '' ? '' : Number(e.target.value))
+                  }
+                  disabled={!selectedMealPlan}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white disabled:bg-gray-100"
+                >
+                  <option value="">Choose a day...</option>
+                  {selectedMealPlan &&
+                    (() => {
+                      const plan = mealPlans.find((p) => p.id === selectedMealPlan);
+                      if (!plan) return null;
+                      return [0, 1, 2, 3, 4, 5, 6].map((offset) => (
+                        <option key={offset} value={offset}>
+                          {formatDayOption(plan.week_start_date, offset)}
                         </option>
-                      );
-                    })}
-                  </select>
-                </div>
+                      ));
+                    })()}
+                </select>
+              </div>
 
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Day
-                  </label>
-                  <select
-                    value={selectedDayIndex === '' ? '' : String(selectedDayIndex)}
-                    onChange={(e) =>
-                      setSelectedDayIndex(e.target.value === '' ? '' : Number(e.target.value))
-                    }
-                    disabled={!selectedMealPlan}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white disabled:bg-gray-100"
-                  >
-                    <option value="">Choose a day...</option>
-                    {selectedMealPlan &&
-                      (() => {
-                        const plan = mealPlans.find((p) => p.id === selectedMealPlan);
-                        if (!plan) return null;
-                        return [0, 1, 2, 3, 4, 5, 6].map((offset) => (
-                          <option key={offset} value={offset}>
-                            {formatDayOption(plan.week_start_date, offset)}
-                          </option>
-                        ));
-                      })()}
-                  </select>
-                </div>
-
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => {
-                      setShowMealPlanModal(false);
-                      setSelectedDate('');
-                    }}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={addToMealPlan}
-                    disabled={selectedDayIndex === ''}
-                    className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Add
-                  </button>
-                </div>
-              </>
-            )}
+              <div className="flex gap-4">
+                <button
+                  onClick={() => {
+                    setShowMealPlanModal(false);
+                    setSelectedDayIndex('');
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={addToMealPlan}
+                  disabled={selectedDayIndex === ''}
+                  className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Add
+                </button>
+              </div>
+            </>
           </div>
         </div>
       )}

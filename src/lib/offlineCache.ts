@@ -48,6 +48,58 @@ export function enqueueRating(entry: QueuedRating): void {
   writeRatingQueue(queue);
 }
 
+export interface QueuedMealPlanAdd {
+  kind: 'add';
+  tempId: string;
+  mealPlanId: string;
+  recipeId: string;
+  dayOfWeek: number;
+  createdAt: string;
+}
+
+export interface QueuedMealPlanDelete {
+  kind: 'delete';
+  itemId: string;
+  createdAt: string;
+}
+
+export type QueuedMealPlanOp = QueuedMealPlanAdd | QueuedMealPlanDelete;
+
+const MEAL_PLAN_QUEUE_KEY = `${PREFIX}meal-plan-queue`;
+
+export function readMealPlanQueue(): QueuedMealPlanOp[] {
+  try {
+    const raw = localStorage.getItem(MEAL_PLAN_QUEUE_KEY);
+    return raw ? (JSON.parse(raw) as QueuedMealPlanOp[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeMealPlanQueue(queue: QueuedMealPlanOp[]): void {
+  try {
+    localStorage.setItem(MEAL_PLAN_QUEUE_KEY, JSON.stringify(queue));
+  } catch {
+    // ignore
+  }
+}
+
+export function enqueueMealPlanOp(op: QueuedMealPlanOp): void {
+  const queue = readMealPlanQueue();
+  if (op.kind === 'delete') {
+    const addIdx = queue.findIndex(
+      (q) => q.kind === 'add' && q.tempId === op.itemId
+    );
+    if (addIdx !== -1) {
+      queue.splice(addIdx, 1);
+      writeMealPlanQueue(queue);
+      return;
+    }
+  }
+  queue.push(op);
+  writeMealPlanQueue(queue);
+}
+
 function seedId(title: string, url: string | undefined): string {
   const input = `${title}|${url ?? ''}`;
   let h1 = 0x811c9dc5;
