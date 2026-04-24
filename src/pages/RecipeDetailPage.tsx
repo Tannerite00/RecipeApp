@@ -123,6 +123,14 @@ export function RecipeDetailPage() {
   }
 
   async function fetchMealPlans() {
+    const cached = cacheGet<{ id: string; week_start_date: string }[]>('detail-meal-plans');
+    if (cached && cached.length) {
+      setMealPlans(cached);
+      const thisWeek = currentWeekStart();
+      const initial = cached.find((p) => p.week_start_date === thisWeek) ?? cached[0];
+      setSelectedMealPlan(initial.id);
+    }
+
     try {
       await ensureMealPlanWeeks();
 
@@ -144,13 +152,14 @@ export function RecipeDetailPage() {
         });
 
       setMealPlans(unique);
+      cacheSet('detail-meal-plans', unique);
       if (unique.length > 0) {
         const thisWeek = currentWeekStart();
         const initial = unique.find((p) => p.week_start_date === thisWeek) ?? unique[0];
         setSelectedMealPlan(initial.id);
       }
     } catch (err) {
-      console.error('Error fetching meal plans:', err);
+      if (!cached) console.error('Error fetching meal plans:', err);
     }
   }
 

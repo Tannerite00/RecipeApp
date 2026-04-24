@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Trash2, Plus } from 'lucide-react';
 import { supabase, type MealPlan, type Recipe } from '../lib/supabase';
 import { ensureMealPlanWeeks, cutoffWeekStart, currentWeekStart } from '../lib/mealPlanWeeks';
+import { cacheGet, cacheSet } from '../lib/offlineCache';
 
 interface MealPlanItemEntry {
   itemId: string;
@@ -23,6 +24,22 @@ function formatWeekStart(weekStart: string): string {
   return new Date(y, m - 1, d).toLocaleDateString();
 }
 
+function loadMealPlansFromCache(): MealPlanWithItems[] | null {
+  return cacheGet<MealPlanWithItems[]>('meal-plans');
+}
+
+function saveMealPlansToCache(plans: MealPlanWithItems[]): void {
+  cacheSet('meal-plans', plans);
+}
+
+function loadRecipesFromCache(): Pick<Recipe, 'id' | 'title'>[] | null {
+  return cacheGet<Pick<Recipe, 'id' | 'title'>[]>('meal-plan-recipes');
+}
+
+function saveRecipesToCache(recipes: Pick<Recipe, 'id' | 'title'>[]): void {
+  cacheSet('meal-plan-recipes', recipes);
+}
+
 export function MealPlanPage() {
   const navigate = useNavigate();
   const [mealPlans, setMealPlans] = useState<MealPlanWithItems[]>([]);
@@ -32,6 +49,22 @@ export function MealPlanPage() {
   const [openDropdownDay, setOpenDropdownDay] = useState<number | null>(null);
 
   useEffect(() => {
+    const cachedPlans = loadMealPlansFromCache();
+    if (cachedPlans && cachedPlans.length) {
+      setMealPlans(cachedPlans);
+      if (!selectedPlanId) {
+        const thisWeek = currentWeekStart();
+        const current = cachedPlans.find(p => p.week_start_date === thisWeek);
+        setSelectedPlanId((current ?? cachedPlans[0]).id);
+      }
+      setLoading(false);
+    }
+
+    const cachedRecipes = loadRecipesFromCache();
+    if (cachedRecipes && cachedRecipes.length) {
+      setRecipes(cachedRecipes);
+    }
+
     (async () => {
       await ensureMealPlanWeeks();
       await fetchMealPlans();
@@ -43,13 +76,17 @@ export function MealPlanPage() {
     try {
       const { data, error } = await supabase
         .from('recipes')
-        .select('id, title') 
+        .select('id, title')
         .order('title');
 
       if (error) throw error;
-      setRecipes(data || []);
+      const fresh = data || [];
+      setRecipes(fresh);
+      saveRecipesToCache(fresh);
     } catch (err) {
-      console.error('Error fetching recipes:', err);
+      if (!loadRecipesFromCache()) {
+        console.error('Error fetching recipes:', err);
+      }
     }
   }
 
@@ -98,6 +135,7 @@ export function MealPlanPage() {
       });
 
       setMealPlans(groupedPlans);
+      saveMealPlansToCache(groupedPlans);
 
       if (groupedPlans.length > 0 && !selectedPlanId) {
         const thisWeek = currentWeekStart();
@@ -113,6 +151,34 @@ export function MealPlanPage() {
   }
 
   async function addRecipeToDay(mealPlanId: string, recipeId: string, dayOfWeek: number) {
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const matchedRecipe = recipes.find(r => r.id === recipeId);
+
+    setMealPlans(prev => {
+      const updated = prev.map(plan => {
+        if (plan.id !== mealPlanId) return plan;
+
+        const updatedItems = [...plan.items];
+
+        updatedItems[dayOfWeek] = {
+          ...updatedItems[dayOfWeek],
+          entries: [
+            ...updatedItems[dayOfWeek].entries,
+            {
+              itemId: tempId,
+              recipe: { id: recipeId, title: matchedRecipe?.title ?? '' } as Recipe
+            }
+          ]
+        };
+
+        return { ...plan, items: updatedItems };
+      });
+      saveMealPlansToCache(updated);
+      return updated;
+    });
+
+    setOpenDropdownDay(null);
+
     try {
       const { data, error } = await supabase
         .from('meal_plan_items')
@@ -126,34 +192,49 @@ export function MealPlanPage() {
 
       if (error) throw error;
 
-      setMealPlans(prev =>
-        prev.map(plan => {
+      setMealPlans(prev => {
+        const updated = prev.map(plan => {
           if (plan.id !== mealPlanId) return plan;
 
           const updatedItems = [...plan.items];
 
           updatedItems[dayOfWeek] = {
             ...updatedItems[dayOfWeek],
-            entries: [
-              ...updatedItems[dayOfWeek].entries,
-              {
-                itemId: data.id,
-                recipe: data.recipes
-              }
-            ]
+            entries: updatedItems[dayOfWeek].entries.map(e =>
+              e.itemId === tempId
+                ? { itemId: data.id, recipe: data.recipes as unknown as Recipe }
+                : e
+            )
           };
 
           return { ...plan, items: updatedItems };
-        })
-      );
-
-      setOpenDropdownDay(null);
+        });
+        saveMealPlansToCache(updated);
+        return updated;
+      });
     } catch (err) {
       console.error('Error adding recipe to day:', err);
     }
   }
 
   async function deleteMealPlanItem(itemId: string, mealPlanId: string, dayOfWeek: number) {
+    setMealPlans(prev => {
+      const updated = prev.map(plan => {
+        if (plan.id !== mealPlanId) return plan;
+
+        const updatedItems = [...plan.items];
+
+        updatedItems[dayOfWeek] = {
+          ...updatedItems[dayOfWeek],
+          entries: updatedItems[dayOfWeek].entries.filter(e => e.itemId !== itemId)
+        };
+
+        return { ...plan, items: updatedItems };
+      });
+      saveMealPlansToCache(updated);
+      return updated;
+    });
+
     try {
       const { error } = await supabase
         .from('meal_plan_items')
@@ -161,21 +242,6 @@ export function MealPlanPage() {
         .eq('id', itemId);
 
       if (error) throw error;
-
-      setMealPlans(prev =>
-        prev.map(plan => {
-          if (plan.id !== mealPlanId) return plan;
-
-          const updatedItems = [...plan.items];
-
-          updatedItems[dayOfWeek] = {
-            ...updatedItems[dayOfWeek],
-            entries: updatedItems[dayOfWeek].entries.filter(e => e.itemId !== itemId)
-          };
-
-          return { ...plan, items: updatedItems };
-        })
-      );
     } catch (err) {
       console.error('Error deleting meal plan item:', err);
     }

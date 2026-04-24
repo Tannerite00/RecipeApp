@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { supabase, type MealPlan, type Recipe } from '../lib/supabase';
 import { ensureMealPlanWeeks, cutoffWeekStart, currentWeekStart } from '../lib/mealPlanWeeks';
+import { cacheGet, cacheSet } from '../lib/offlineCache';
 
 interface Ingredient {
   name: string;
@@ -143,6 +144,20 @@ export function GroceryListPage() {
   const [isComplete, setIsComplete] = useState(false);
 
   useEffect(() => {
+    const cachedPlans = cacheGet<MealPlan[]>('grocery-meal-plans');
+    if (cachedPlans && cachedPlans.length) {
+      setMealPlans(cachedPlans);
+      const thisWeek = currentWeekStart();
+      const initial = cachedPlans.find(p => p.week_start_date === thisWeek) ?? cachedPlans[0];
+      setSelectedMealPlan(initial.id);
+
+      const cachedGrocery = cacheGet<Ingredient[]>(`grocery-items-${initial.id}`);
+      if (cachedGrocery) {
+        setGroceryItems(cachedGrocery);
+      }
+      setLoading(false);
+    }
+
     (async () => {
       await ensureMealPlanWeeks();
       await fetchMealPlans();
@@ -190,6 +205,7 @@ export function GroceryListPage() {
         });
 
       setMealPlans(uniquePlans);
+      cacheSet('grocery-meal-plans', uniquePlans);
 
       if (uniquePlans.length > 0) {
         const thisWeek = currentWeekStart();
@@ -198,7 +214,9 @@ export function GroceryListPage() {
         fetchGroceryList(initial.id);
       }
     } catch (err) {
-      console.error('Error fetching meal plans:', err);
+      if (!cacheGet<MealPlan[]>('grocery-meal-plans')) {
+        console.error('Error fetching meal plans:', err);
+      }
     } finally {
       setLoading(false);
     }
@@ -227,8 +245,14 @@ export function GroceryListPage() {
         .sort((a, b) => a.name.localeCompare(b.name));
 
       setGroceryItems(ingredientArray);
+      cacheSet(`grocery-items-${mealPlanId}`, ingredientArray);
     } catch (err) {
-      console.error('Error fetching grocery list:', err);
+      const cached = cacheGet<Ingredient[]>(`grocery-items-${mealPlanId}`);
+      if (cached) {
+        setGroceryItems(cached);
+      } else {
+        console.error('Error fetching grocery list:', err);
+      }
     }
   }
 
