@@ -3,15 +3,34 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// ✅ FIX: Added explicit auth config for offline persistence
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     storage: localStorage,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    flowType: 'pkce',
   },
 });
+
+const SESSION_KEY = 'offline-session';
+
+export function saveSession(session: any) {
+  if (session) {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  }
+}
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  if (session) {
+    saveSession(session);
+  }
+});
+
+export function loadSession() {
+  const raw = localStorage.getItem(SESSION_KEY);
+  return raw ? JSON.parse(raw) : null;
+}
 
 export interface Recipe {
   id: string;
