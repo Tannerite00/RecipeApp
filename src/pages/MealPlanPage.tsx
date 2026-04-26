@@ -113,12 +113,18 @@ export function MealPlanPage() {
       setRecipes(cachedRecipes);
     }
 
-    (async () => {
-      await ensureMealPlanWeeks();
-      await fetchMealPlans();
-    })();
-    fetchRecipes();
-  }, []);
+
+const isOnline = navigator.onLine;
+
+if (isOnline) {
+  (async () => {
+    await ensureMealPlanWeeks();
+    await fetchMealPlans();
+  })();
+  if (navigator.onLine) {
+  fetchRecipes();
+}
+}
 
   async function fetchRecipes() {
     try {
@@ -183,8 +189,11 @@ export function MealPlanPage() {
 
       const withCurrentWeeks = ensureCachedPlansHaveCurrentWeeks(groupedPlans);
 
-      setMealPlans(withCurrentWeeks);
-      saveMealPlansToCache(withCurrentWeeks);
+      setMealPlans(prev => {
+        const merged = mergePlans(prev, withCurrentWeeks);
+        saveMealPlansToCache(merged);
+        return merged;
+      }); 
 
       const idMap = new Map<string, string>();
       for (const plan of withCurrentWeeks) {
@@ -205,7 +214,14 @@ export function MealPlanPage() {
 
       setLoading(false);
 
-      await flushMealPlanQueue();
+      useEffect(() => {
+  const handleOnline = () => {
+    flushMealPlanQueue();
+  };
+
+  window.addEventListener('online', handleOnline);
+  return () => window.removeEventListener('online', handleOnline);
+}, []);
     } catch (err) {
       console.error('Error fetching meal plans:', err);
       setLoading(false);
@@ -466,7 +482,8 @@ async function resolveOfflinePlanId(offlineId: string): Promise<string | null> {
       .select('id')
       .eq('week_start_date', weekStart)
       .limit(1);
-
+    if (!navigator.onLine) return null;
+    
     if (plans && plans.length) return plans[0].id;
 
     const { data: created } = await supabase
