@@ -25,6 +25,10 @@ interface MealPlanWithItems extends MealPlan {
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+function isOnlineSafe() {
+  return typeof navigator !== 'undefined' && navigator.onLine;
+}
+
 function emptyWeekItems() {
   return Array(7).fill(null).map((_, day) => ({
     day_of_week: day,
@@ -125,6 +129,8 @@ export function MealPlanPage() {
 
   async function fetchMealPlans() {
     try {
+      if (!isOnlineSafe()) return;
+
       const { data: plans, error } = await supabase
         .from('meal_plans')
         .select('*')
@@ -174,23 +180,28 @@ export function MealPlanPage() {
         return merged;
       });
 
-      if (!selectedPlanId && withCurrentWeeks.length) {
+      // FIXED: no stale state usage
+      setSelectedPlanId(prev => {
+        if (prev) return prev;
+
         const thisWeek = currentWeekStart();
         const current = withCurrentWeeks.find(p => p.week_start_date === thisWeek);
-        setSelectedPlanId((current ?? withCurrentWeeks[0]).id);
-      }
+
+        return (current ?? withCurrentWeeks[0])?.id ?? null;
+      });
 
       await flushMealPlanQueue();
     } catch {
       const cached = loadMealPlansFromCache();
       if (cached) setMealPlans(cached);
     } finally {
+      // ONLY UI bootstrap controls loading
       setLoading(false);
     }
   }
 
   // ----------------------------
-  // CACHE-FIRST BOOTSTRAP (NO AUTH GATING)
+  // BOOTSTRAP (CACHE FIRST, ALWAYS RENDER)
   // ----------------------------
   useEffect(() => {
     const cachedPlans = loadMealPlansFromCache();
@@ -202,17 +213,17 @@ export function MealPlanPage() {
 
       const thisWeek = currentWeekStart();
       const current = normalized.find(p => p.week_start_date === thisWeek);
-      setSelectedPlanId((current ?? normalized[0]).id);
+
+      setSelectedPlanId((current ?? normalized[0])?.id ?? null);
     }
 
     const cachedRecipes = loadRecipesFromCache();
     if (cachedRecipes) setRecipes(cachedRecipes);
 
-    // ALWAYS render immediately
     setLoading(false);
 
-    // background sync only
-    if (navigator.onLine) {
+    // background sync ONLY
+    if (isOnlineSafe()) {
       ensureMealPlanWeeks().then(() => {
         fetchMealPlans();
         fetchRecipes();
@@ -221,13 +232,13 @@ export function MealPlanPage() {
   }, []);
 
   // ----------------------------
-  // ONLINE RECOVERY SYNC
+  // ONLINE SYNC
   // ----------------------------
   useEffect(() => {
     const handleOnline = () => {
       flushMealPlanQueue();
 
-      if (navigator.onLine) {
+      if (isOnlineSafe()) {
         fetchMealPlans();
         fetchRecipes();
       }
@@ -238,7 +249,7 @@ export function MealPlanPage() {
   }, []);
 
   // ----------------------------
-  // UI ACTIONS (UNCHANGED LOGIC)
+  // UI ACTIONS
   // ----------------------------
   async function addRecipeToDay(mealPlanId: string, recipeId: string, dayOfWeek: number) {
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
