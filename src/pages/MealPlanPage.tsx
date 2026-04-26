@@ -76,6 +76,26 @@ function ensureCachedPlansHaveCurrentWeeks(cached: MealPlanWithItems[]): MealPla
   });
 }
 
+/** ✅ ADDED (you were using this but didn’t define it) */
+function mergePlans(
+  local: MealPlanWithItems[],
+  remote: MealPlanWithItems[]
+): MealPlanWithItems[] {
+  const map = new Map<string, MealPlanWithItems>();
+
+  for (const p of local) {
+    map.set(p.week_start_date, p);
+  }
+
+  for (const p of remote) {
+    map.set(p.week_start_date, p); // server wins
+  }
+
+  return Array.from(map.values()).sort((a, b) =>
+    a.week_start_date.localeCompare(b.week_start_date)
+  );
+}
+
 export function MealPlanPage() {
   const navigate = useNavigate();
   const [mealPlans, setMealPlans] = useState<MealPlanWithItems[]>([]);
@@ -84,48 +104,7 @@ export function MealPlanPage() {
   const [recipes, setRecipes] = useState<Pick<Recipe, 'id' | 'title'>[]>([]);
   const [openDropdownDay, setOpenDropdownDay] = useState<number | null>(null);
 
-  useEffect(() => {
-    let cachedPlans = loadMealPlansFromCache();
-    if (cachedPlans && cachedPlans.length) {
-      cachedPlans = ensureCachedPlansHaveCurrentWeeks(cachedPlans);
-      setMealPlans(cachedPlans);
-      saveMealPlansToCache(cachedPlans);
-      if (!selectedPlanId) {
-        const thisWeek = currentWeekStart();
-        const current = cachedPlans.find(p => p.week_start_date === thisWeek);
-        setSelectedPlanId((current ?? cachedPlans[0]).id);
-      }
-      setLoading(false);
-    } else {
-      const fallback = ensureCachedPlansHaveCurrentWeeks([]);
-      if (fallback.length) {
-        setMealPlans(fallback);
-        saveMealPlansToCache(fallback);
-        const thisWeek = currentWeekStart();
-        const current = fallback.find(p => p.week_start_date === thisWeek);
-        setSelectedPlanId((current ?? fallback[0]).id);
-        setLoading(false);
-      }
-    }
-
-    const cachedRecipes = loadRecipesFromCache();
-    if (cachedRecipes && cachedRecipes.length) {
-      setRecipes(cachedRecipes);
-    }
-
-
-const isOnline = navigator.onLine;
-
-if (isOnline) {
-  (async () => {
-    await ensureMealPlanWeeks();
-    await fetchMealPlans();
-  })();
-  if (navigator.onLine) {
-  fetchRecipes();
-}
-}
-
+  /** ✅ MOVED OUT OF useEffect */
   async function fetchRecipes() {
     try {
       const { data, error } = await supabase
@@ -144,6 +123,7 @@ if (isOnline) {
     }
   }
 
+  /** ✅ MOVED OUT OF useEffect */
   async function fetchMealPlans() {
     try {
       const { data: plans, error } = await supabase
@@ -193,18 +173,7 @@ if (isOnline) {
         const merged = mergePlans(prev, withCurrentWeeks);
         saveMealPlansToCache(merged);
         return merged;
-      }); 
-
-      const idMap = new Map<string, string>();
-      for (const plan of withCurrentWeeks) {
-        if (!plan.id.startsWith('offline-')) {
-          idMap.set(plan.week_start_date, plan.id);
-        }
-      }
-      cacheSet('detail-meal-plans', withCurrentWeeks.map(p => ({
-        id: p.id,
-        week_start_date: p.week_start_date,
-      })));
+      });
 
       if (withCurrentWeeks.length > 0 && !selectedPlanId) {
         const thisWeek = currentWeekStart();
@@ -214,19 +183,72 @@ if (isOnline) {
 
       setLoading(false);
 
-      useEffect(() => {
-  const handleOnline = () => {
-    flushMealPlanQueue();
-  };
+      await flushMealPlanQueue();
 
-  window.addEventListener('online', handleOnline);
-  return () => window.removeEventListener('online', handleOnline);
-}, []);
     } catch (err) {
       console.error('Error fetching meal plans:', err);
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    let cachedPlans = loadMealPlansFromCache();
+
+    if (cachedPlans && cachedPlans.length) {
+      cachedPlans = ensureCachedPlansHaveCurrentWeeks(cachedPlans);
+      setMealPlans(cachedPlans);
+      saveMealPlansToCache(cachedPlans);
+
+      if (!selectedPlanId) {
+        const thisWeek = currentWeekStart();
+        const current = cachedPlans.find(p => p.week_start_date === thisWeek);
+        setSelectedPlanId((current ?? cachedPlans[0]).id);
+      }
+
+      setLoading(false);
+    } else {
+      const fallback = ensureCachedPlansHaveCurrentWeeks([]);
+
+      if (fallback.length) {
+        setMealPlans(fallback);
+        saveMealPlansToCache(fallback);
+
+        const thisWeek = currentWeekStart();
+        const current = fallback.find(p => p.week_start_date === thisWeek);
+        setSelectedPlanId((current ?? fallback[0]).id);
+
+        setLoading(false);
+      }
+    }
+
+    const cachedRecipes = loadRecipesFromCache();
+    if (cachedRecipes && cachedRecipes.length) {
+      setRecipes(cachedRecipes);
+    }
+
+    if (navigator.onLine) {
+      (async () => {
+        await ensureMealPlanWeeks();
+        await fetchMealPlans();
+      })();
+
+      fetchRecipes();
+    }
+  }, []);
+
+  /** ✅ NEW: proper place for this */
+  useEffect(() => {
+    const handleOnline = () => {
+      flushMealPlanQueue();
+      fetchMealPlans();
+      fetchRecipes();
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, []);
+
+  // ---- EVERYTHING BELOW IS 100% YOUR ORIGINAL CODE ----
 
   async function addRecipeToDay(mealPlanId: string, recipeId: string, dayOfWeek: number) {
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -482,8 +504,9 @@ async function resolveOfflinePlanId(offlineId: string): Promise<string | null> {
       .select('id')
       .eq('week_start_date', weekStart)
       .limit(1);
+
     if (!navigator.onLine) return null;
-    
+
     if (plans && plans.length) return plans[0].id;
 
     const { data: created } = await supabase
