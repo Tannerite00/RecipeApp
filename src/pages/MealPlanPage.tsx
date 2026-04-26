@@ -93,20 +93,18 @@ function mergePlans(local: MealPlanWithItems[], remote: MealPlanWithItems[]) {
   );
 }
 
-function isSupabaseHealthy() {
-  // IMPORTANT: avoids silent auth-loss overwriting UI
-  const session = supabase.auth.getSession?.();
-  return navigator.onLine && !!session;
-}
-
 export function MealPlanPage() {
   const navigate = useNavigate();
+
   const [mealPlans, setMealPlans] = useState<MealPlanWithItems[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [recipes, setRecipes] = useState<Pick<Recipe, 'id' | 'title'>[]>([]);
   const [openDropdownDay, setOpenDropdownDay] = useState<number | null>(null);
 
+  // ----------------------------
+  // SUPABASE FETCH (BACKGROUND ONLY)
+  // ----------------------------
   async function fetchRecipes() {
     try {
       const { data, error } = await supabase
@@ -120,7 +118,6 @@ export function MealPlanPage() {
       setRecipes(fresh);
       saveRecipesToCache(fresh);
     } catch {
-      // DO NOT clear UI if offline/auth broken
       const cached = loadRecipesFromCache();
       if (cached) setRecipes(cached);
     }
@@ -183,17 +180,18 @@ export function MealPlanPage() {
         setSelectedPlanId((current ?? withCurrentWeeks[0]).id);
       }
 
-      setLoading(false);
       await flushMealPlanQueue();
-
     } catch {
-      // CRITICAL FIX: never wipe cache on failure
       const cached = loadMealPlansFromCache();
       if (cached) setMealPlans(cached);
+    } finally {
       setLoading(false);
     }
   }
 
+  // ----------------------------
+  // CACHE-FIRST BOOTSTRAP (NO AUTH GATING)
+  // ----------------------------
   useEffect(() => {
     const cachedPlans = loadMealPlansFromCache();
 
@@ -205,26 +203,31 @@ export function MealPlanPage() {
       const thisWeek = currentWeekStart();
       const current = normalized.find(p => p.week_start_date === thisWeek);
       setSelectedPlanId((current ?? normalized[0]).id);
-
-      setLoading(false);
     }
 
     const cachedRecipes = loadRecipesFromCache();
     if (cachedRecipes) setRecipes(cachedRecipes);
 
-    // ONLY fetch if healthy session exists
-    if (isSupabaseHealthy()) {
-      ensureMealPlanWeeks().then(fetchMealPlans);
-      fetchRecipes();
-    } else {
-      setLoading(false);
+    // ALWAYS render immediately
+    setLoading(false);
+
+    // background sync only
+    if (navigator.onLine) {
+      ensureMealPlanWeeks().then(() => {
+        fetchMealPlans();
+        fetchRecipes();
+      });
     }
   }, []);
 
+  // ----------------------------
+  // ONLINE RECOVERY SYNC
+  // ----------------------------
   useEffect(() => {
     const handleOnline = () => {
       flushMealPlanQueue();
-      if (isSupabaseHealthy()) {
+
+      if (navigator.onLine) {
         fetchMealPlans();
         fetchRecipes();
       }
@@ -234,8 +237,9 @@ export function MealPlanPage() {
     return () => window.removeEventListener('online', handleOnline);
   }, []);
 
-  // ---------------- YOUR ORIGINAL UI LOGIC BELOW ----------------
-
+  // ----------------------------
+  // UI ACTIONS (UNCHANGED LOGIC)
+  // ----------------------------
   async function addRecipeToDay(mealPlanId: string, recipeId: string, dayOfWeek: number) {
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const matchedRecipe = recipes.find(r => r.id === recipeId);
@@ -363,6 +367,9 @@ export function MealPlanPage() {
     }
   }
 
+  // ----------------------------
+  // UI
+  // ----------------------------
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -383,7 +390,6 @@ export function MealPlanPage() {
           </h1>
         </div>
 
-        {/* UI unchanged */}
         {selectedPlan && (
           <div>... your existing UI ...</div>
         )}
