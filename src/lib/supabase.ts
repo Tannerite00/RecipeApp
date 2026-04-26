@@ -21,6 +21,15 @@ export function saveSession(session: any) {
   }
 }
 
+export async function getSafeSession() {
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data?.session ?? null;
+  } catch {
+    return null;
+  }
+}
+
 supabase.auth.onAuthStateChange((_event, session) => {
   if (session) {
     saveSession(session);
