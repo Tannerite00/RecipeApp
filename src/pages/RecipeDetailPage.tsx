@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'; 
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, Plus, ChevronDown } from 'lucide-react';
 import { type Recipe } from '../lib/supabase';
 import { parseISO8601Duration } from '../lib/utils';
 import { StarRating } from '../components/StarRating';
@@ -8,6 +8,7 @@ import { RecipeComments } from '../components/RecipeComments';
 import { currentWeekStart, getOfflineMealPlans } from '../lib/mealPlanWeeks';
 import { cacheGet, cacheSet, enqueueRating, enqueueMealPlanOp } from '../lib/offlineCache';
 import { markDirty, flushWrites } from '../lib/syncManager';
+import { parseServingCount, generateServingOptions, scaleIngredient } from '../lib/servingScale';
 
 export function RecipeDetailPage() {
   const { id } = useParams();
@@ -24,6 +25,12 @@ export function RecipeDetailPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [ratingMessage, setRatingMessage] = useState<string | null>(null);
   const [addedMessage, setAddedMessage] = useState<string | null>(null);
+  const [chosenServings, setChosenServings] = useState<number | null>(null);
+
+  const baseServingCount = useMemo(() => recipe ? parseServingCount(recipe.servings) : null, [recipe]);
+  const servingOptions = useMemo(() => baseServingCount ? generateServingOptions(baseServingCount) : [], [baseServingCount]);
+  const activeServings = chosenServings ?? baseServingCount;
+  const servingMultiplier = (activeServings && baseServingCount) ? activeServings / baseServingCount : 1;
 
   const isFromMealPlan = location.state?.fromMealPlan === true;
   const backPath = isFromMealPlan ? '/meal-plans' : '/';
@@ -196,7 +203,27 @@ export function RecipeDetailPage() {
             </div>
             <div>
               <h3 className="text-xs sm:text-sm font-semibold text-gray-600 uppercase">Servings</h3>
-              <p className="text-base sm:text-lg font-bold text-gray-900">{recipe.servings}</p>
+              {baseServingCount && servingOptions.length > 1 ? (
+                <div className="relative inline-block mt-0.5">
+                  <select
+                    value={activeServings ?? baseServingCount}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setChosenServings(val === baseServingCount ? null : val);
+                    }}
+                    className="appearance-none text-base sm:text-lg font-bold text-gray-900 bg-orange-50 border border-orange-200 rounded-lg pl-3 pr-8 py-1 cursor-pointer hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-colors"
+                  >
+                    {servingOptions.map((s) => (
+                      <option key={s} value={s}>
+                        {s}{s === baseServingCount ? ' (original)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-500 pointer-events-none" />
+                </div>
+              ) : (
+                <p className="text-base sm:text-lg font-bold text-gray-900">{recipe.servings}</p>
+              )}
             </div>
             <div>
               <h3 className="text-xs sm:text-sm font-semibold text-gray-600 uppercase">Rating</h3>
@@ -228,14 +255,21 @@ export function RecipeDetailPage() {
           </div>
 
           <div className="mb-6 sm:mb-8">
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3 sm:mb-4">Ingredients</h2>
+            <div className="flex items-center gap-3 mb-3 sm:mb-4">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Ingredients</h2>
+              {servingMultiplier !== 1 && (
+                <span className="text-xs font-medium bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                  Adjusted for {activeServings} servings
+                </span>
+              )}
+            </div>
             <ul className="space-y-2">
               {recipe.ingredients.map((ingredient, idx) => {
-                const cleaned = ingredient.trim().replace(/<[^>]*>/g, '');
-                return cleaned ? (
+                const scaled = scaleIngredient(ingredient, servingMultiplier);
+                return scaled ? (
                   <li key={idx} className="flex items-start gap-3 text-gray-700">
                     <span className="text-orange-600 font-bold mt-1">&#8226;</span>
-                    <span>{cleaned}</span>
+                    <span>{scaled}</span>
                   </li>
                 ) : null;
               })}
