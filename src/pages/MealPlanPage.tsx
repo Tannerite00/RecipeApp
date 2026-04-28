@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react'; 
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Trash2, Plus, GripVertical } from 'lucide-react';
 import { type MealPlan, type Recipe } from '../lib/supabase';
