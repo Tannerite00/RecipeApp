@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'; 
+import { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { type MealPlan, type Recipe } from '../lib/supabase';
 import { currentWeekStart, getOfflineMealPlans } from '../lib/mealPlanWeeks';
-import { cacheGet } from '../lib/offlineCache';
+import { cacheGet, getServingOverrides } from '../lib/offlineCache';
+import { parseServingCount, scaleIngredient } from '../lib/servingScale';
 
 interface Ingredient {
   name: string;
@@ -131,7 +132,6 @@ export function GroceryListPage() {
   }, [checkedItems, groceryItems]);
 
   function buildGroceryList(mealPlanId: string) {
-    // Build from cached meal plan data
     const cachedMealPlans = cacheGet<any[]>('meal-plans');
     if (!cachedMealPlans) {
       setGroceryItems([]);
@@ -144,12 +144,25 @@ export function GroceryListPage() {
     }
 
     const allRecipes = cacheGet<Recipe[]>('recipes') || [];
+    const overrides = getServingOverrides();
     const ingredientLists: string[][] = [];
 
     for (const day of plan.items) {
       for (const entry of day.entries) {
         const recipe = allRecipes.find((r: Recipe) => r.id === entry.recipe?.id);
-        if (recipe) ingredientLists.push(recipe.ingredients);
+        if (!recipe) continue;
+
+        const chosenServings = overrides[entry.itemId];
+        const baseCount = parseServingCount(recipe.servings);
+        const multiplier = (chosenServings && baseCount) ? chosenServings / baseCount : 1;
+
+        if (multiplier === 1) {
+          ingredientLists.push(recipe.ingredients);
+        } else {
+          ingredientLists.push(
+            recipe.ingredients.map((ing: string) => scaleIngredient(ing, multiplier))
+          );
+        }
       }
     }
 

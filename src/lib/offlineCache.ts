@@ -153,6 +153,24 @@ export function enqueueCommentOp(op: QueuedCommentOp): void {
   writeCommentQueue(queue);
 }
 
+// --- Serving overrides (itemId -> chosen serving count) ---
+
+export function getServingOverrides(): Record<string, number> {
+  return cacheGet<Record<string, number>>('serving-overrides') || {};
+}
+
+export function setServingOverride(itemId: string, servings: number): void {
+  const overrides = getServingOverrides();
+  overrides[itemId] = servings;
+  cacheSet('serving-overrides', overrides);
+}
+
+export function removeServingOverride(itemId: string): void {
+  const overrides = getServingOverrides();
+  delete overrides[itemId];
+  cacheSet('serving-overrides', overrides);
+}
+
 // --- Bundled recipe fallback ---
 
 function seedId(title: string, url: string | undefined): string {

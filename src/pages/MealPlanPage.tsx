@@ -1,10 +1,11 @@
-import { useEffect, useState, useRef } from 'react'; 
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Trash2, Plus, GripVertical } from 'lucide-react';
+import { Trash2, Plus, GripVertical, ChevronDown } from 'lucide-react';
 import { type MealPlan, type Recipe } from '../lib/supabase';
 import { cutoffWeekStart, currentWeekStart, plannableWeekStarts } from '../lib/mealPlanWeeks';
-import { cacheGet, cacheSet, enqueueMealPlanOp } from '../lib/offlineCache';
+import { cacheGet, cacheSet, enqueueMealPlanOp, getServingOverrides, setServingOverride, removeServingOverride } from '../lib/offlineCache';
 import { markDirty, flushWrites } from '../lib/syncManager';
+import { parseServingCount, generateServingOptions } from '../lib/servingScale';
 
 interface MealPlanItemEntry {
   itemId: string;
@@ -69,6 +70,22 @@ export function MealPlanPage() {
 
   const dragItem = useRef<{ itemId: string; fromDay: number } | null>(null);
   const [dragOverDay, setDragOverDay] = useState<number | null>(null);
+  const [servingOverrides, setServingOverridesState] = useState<Record<string, number>>(getServingOverrides);
+
+  function handleServingChange(itemId: string, recipe: Recipe, newServings: number) {
+    const base = parseServingCount(recipe.servings);
+    if (base && newServings === base) {
+      removeServingOverride(itemId);
+      setServingOverridesState(prev => {
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      });
+    } else {
+      setServingOverride(itemId, newServings);
+      setServingOverridesState(prev => ({ ...prev, [itemId]: newServings }));
+    }
+  }
 
   useEffect(() => {
     let cached = cacheGet<MealPlanWithItems[]>('meal-plans');
@@ -154,6 +171,13 @@ export function MealPlanPage() {
       });
       cacheSet('meal-plans', updated);
       return updated;
+    });
+
+    removeServingOverride(itemId);
+    setServingOverridesState(prev => {
+      const next = { ...prev };
+      delete next[itemId];
+      return next;
     });
 
     enqueueMealPlanOp({ kind: 'delete', itemId, createdAt: new Date().toISOString() });
@@ -306,32 +330,65 @@ export function MealPlanPage() {
 
                       <h3 className="font-bold mb-3">{day}</h3>
 
-                      {selectedPlan.items[idx]?.entries.map(({ itemId, recipe }) => (
-                        <div
-                          key={itemId}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, itemId, idx)}
-                          onDragEnd={handleDragEnd}
-                          className="flex items-center justify-between bg-blue-50 p-3 mb-2 rounded cursor-grab active:cursor-grabbing group"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <GripVertical className="w-4 h-4 text-gray-400 flex-shrink-0 opacity-50 group-hover:opacity-100 transition-opacity" />
+                      {selectedPlan.items[idx]?.entries.map(({ itemId, recipe }) => {
+                        const baseCount = parseServingCount(recipe.servings);
+                        const options = baseCount ? generateServingOptions(baseCount) : [];
+                        const currentServings = servingOverrides[itemId] ?? baseCount;
+
+                        return (
+                          <div
+                            key={itemId}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, itemId, idx)}
+                            onDragEnd={handleDragEnd}
+                            className="flex items-center justify-between bg-blue-50 p-3 mb-2 rounded cursor-grab active:cursor-grabbing group"
+                          >
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <GripVertical className="w-4 h-4 text-gray-400 flex-shrink-0 opacity-50 group-hover:opacity-100 transition-opacity" />
+                              <div className="min-w-0 flex-1">
+                                <button
+                                  onClick={() => navigate(`/recipe/${recipe.id}`, { state: { fromMealPlan: true, mealPlanItemId: itemId } })}
+                                  className="text-blue-600 text-sm truncate block max-w-full text-left"
+                                >
+                                  {recipe.title}
+                                </button>
+                                {baseCount && options.length > 1 ? (
+                                  <div className="flex items-center gap-1.5 mt-1" onClick={(e) => e.stopPropagation()}>
+                                    <span className="text-xs text-gray-500">Servings:</span>
+                                    <div className="relative inline-block">
+                                      <select
+                                        value={currentServings ?? baseCount}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          handleServingChange(itemId, recipe, Number(e.target.value));
+                                        }}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        className="appearance-none text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded pl-2 pr-5 py-0.5 cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                      >
+                                        {options.map((s) => (
+                                          <option key={s} value={s}>
+                                            {s}{s === baseCount ? ' (original)' : ''}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <ChevronDown className="absolute right-1 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+                                    </div>
+                                  </div>
+                                ) : baseCount ? (
+                                  <span className="text-xs text-gray-500 mt-1 block">Servings: {baseCount}</span>
+                                ) : null}
+                              </div>
+                            </div>
+
                             <button
-                              onClick={() => navigate(`/recipe/${recipe.id}`)}
-                              className="text-blue-600 text-sm truncate"
+                              onClick={() => deleteMealPlanItem(itemId, selectedPlan.id, idx)}
+                              className="flex-shrink-0 ml-2"
                             >
-                              {recipe.title}
+                              <Trash2 className="w-4 h-4 text-red-500" />
                             </button>
                           </div>
-
-                          <button
-                            onClick={() => deleteMealPlanItem(itemId, selectedPlan.id, idx)}
-                            className="flex-shrink-0 ml-2"
-                          >
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                          </button>
-                        </div>
-                      ))}
+                        );
+                      })}
 
                       <button
                         onClick={() =>

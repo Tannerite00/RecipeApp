@@ -6,7 +6,7 @@ import { parseISO8601Duration } from '../lib/utils';
 import { StarRating } from '../components/StarRating';
 import { RecipeComments } from '../components/RecipeComments';
 import { currentWeekStart, getOfflineMealPlans } from '../lib/mealPlanWeeks';
-import { cacheGet, cacheSet, enqueueRating, enqueueMealPlanOp } from '../lib/offlineCache';
+import { cacheGet, cacheSet, enqueueRating, enqueueMealPlanOp, setServingOverride, getServingOverrides } from '../lib/offlineCache';
 import { markDirty, flushWrites } from '../lib/syncManager';
 import { parseServingCount, generateServingOptions, scaleIngredient } from '../lib/servingScale';
 
@@ -33,12 +33,23 @@ export function RecipeDetailPage() {
   const servingMultiplier = (activeServings && baseServingCount) ? activeServings / baseServingCount : 1;
 
   const isFromMealPlan = location.state?.fromMealPlan === true;
+  const mealPlanItemId = (location.state as any)?.mealPlanItemId as string | undefined;
   const backPath = isFromMealPlan ? '/meal-plans' : '/';
   const backText = isFromMealPlan ? 'Back to Meal Plan' : 'Back to Recipes';
 
   useEffect(() => {
     loadFromCache();
   }, [id]);
+
+  useEffect(() => {
+    if (mealPlanItemId && baseServingCount) {
+      const overrides = getServingOverrides();
+      const saved = overrides[mealPlanItemId];
+      if (saved && saved !== baseServingCount) {
+        setChosenServings(saved);
+      }
+    }
+  }, [mealPlanItemId, baseServingCount]);
 
   function loadFromCache() {
     if (!id) return;
@@ -134,6 +145,10 @@ export function RecipeDetailPage() {
         });
         cacheSet('meal-plans', cachedPlans);
       }
+    }
+
+    if (activeServings && baseServingCount && activeServings !== baseServingCount) {
+      setServingOverride(tempId, activeServings);
     }
 
     setShowMealPlanModal(false);
