@@ -260,53 +260,59 @@ export function RecipeListPage() {
               </button>
 
               {showAllergenModal && (
-                <div
-                  ref={modalRef}
-                  className="absolute left-0 top-full mt-2 z-50 w-[340px] sm:w-[400px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in"
-                  style={{ animation: 'fadeSlideIn 0.15s ease-out' }}
-                >
-                  <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <ShieldAlert className="w-4 h-4 text-red-600" />
-                      <h3 className="font-semibold text-gray-900 text-sm">Allergen Filters</h3>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {selectedAllergens.size > 0 && (
+                <>
+                  <div
+                    className="sm:hidden fixed inset-0 bg-black/40 z-40"
+                    onClick={() => setShowAllergenModal(false)}
+                  />
+                  <div
+                    ref={modalRef}
+                    className="fixed inset-x-3 top-1/2 -translate-y-1/2 z-50 sm:absolute sm:inset-auto sm:left-0 sm:top-full sm:mt-2 sm:translate-y-0 w-auto sm:w-[400px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden"
+                    style={{ animation: 'fadeSlideIn 0.15s ease-out' }}
+                  >
+                    <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <ShieldAlert className="w-4 h-4 text-red-600" />
+                        <h3 className="font-semibold text-gray-900 text-sm">Allergen Filters</h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {selectedAllergens.size > 0 && (
+                          <button
+                            onClick={clearAllAllergens}
+                            className="text-xs text-red-600 hover:text-red-700 font-medium"
+                          >
+                            Clear all
+                          </button>
+                        )}
                         <button
-                          onClick={clearAllAllergens}
-                          className="text-xs text-red-600 hover:text-red-700 font-medium"
+                          onClick={() => setShowAllergenModal(false)}
+                          className="text-gray-400 hover:text-gray-600 transition-colors"
                         >
-                          Clear all
+                          <X className="w-4 h-4" />
                         </button>
-                      )}
-                      <button
-                        onClick={() => setShowAllergenModal(false)}
-                        className="text-gray-400 hover:text-gray-600 transition-colors"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                      </div>
+                    </div>
+                    <p className="px-4 pt-3 pb-2 text-xs text-gray-500">
+                      Check allergens to hide recipes containing them.
+                    </p>
+                    <div className="px-2 pb-3 max-h-[60vh] sm:max-h-[360px] overflow-y-auto">
+                      {ALLERGENS.map((allergen) => (
+                        <label
+                          key={allergen.key}
+                          className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedAllergens.has(allergen.key)}
+                            onChange={() => toggleAllergen(allergen.key)}
+                            className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 flex-shrink-0"
+                          />
+                          <span className="text-sm text-gray-800">{allergen.label}</span>
+                        </label>
+                      ))}
                     </div>
                   </div>
-                  <p className="px-4 pt-3 pb-2 text-xs text-gray-500">
-                    Check allergens to hide recipes containing them.
-                  </p>
-                  <div className="px-2 pb-3 max-h-[360px] overflow-y-auto">
-                    {ALLERGENS.map((allergen) => (
-                      <label
-                        key={allergen.key}
-                        className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedAllergens.has(allergen.key)}
-                          onChange={() => toggleAllergen(allergen.key)}
-                          className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 flex-shrink-0"
-                        />
-                        <span className="text-sm text-gray-800">{allergen.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
+                </>
               )}
             </div>
           </div>
