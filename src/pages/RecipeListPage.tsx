@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react'; 
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, X, ArrowLeft } from 'lucide-react';
 import { type Recipe } from '../lib/supabase';
