@@ -32,6 +32,12 @@ const ALLERGENS = [
   { key: 'sesame', label: 'Sesame', terms: ['sesame', 'tahini'] },
   { key: 'lupin', label: 'Lupin (legume, common in EU foods)', terms: ['lupin', 'lupine', 'lupini'] },
   { key: 'sulphites', label: 'Sulphites (preservatives, e.g., in wine/dried fruit)', terms: ['sulphite', 'sulfite', 'sulphites', 'sulfites', 'wine', 'dried fruit'] },
+  { key: 'corn', label: 'Corn', terms: ['corn', 'cornmeal', 'cornstarch', 'corn starch', 'polenta', 'hominy', 'grits', 'maize'] },
+  { key: 'garlic', label: 'Garlic', terms: ['garlic'] },
+  { key: 'onion', label: 'Onion', terms: ['onion', 'onions', 'shallot', 'shallots', 'scallion', 'scallions', 'leek', 'leeks', 'chive', 'chives'] },
+  { key: 'nightshades', label: 'Nightshades (tomato, potato, eggplant)', terms: ['tomato', 'tomatoes', 'potato', 'potatoes', 'eggplant', 'bell pepper', 'bell peppers', 'paprika', 'cayenne', 'jalape', 'chili pepper', 'chipotle'] },
+  { key: 'citrus', label: 'Citrus', terms: ['lemon', 'lime', 'orange', 'grapefruit', 'tangerine', 'clementine', 'mandarin', 'citrus', 'zest'] },
+  { key: 'chocolate', label: 'Chocolate (cocoa)', terms: ['chocolate', 'cocoa', 'cacao'] },
 ];
 
 function recipeContainsAllergen(recipe: Recipe, allergenTerms: string[]): boolean {
