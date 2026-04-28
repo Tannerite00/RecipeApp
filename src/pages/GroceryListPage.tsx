@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react'; 
 import confetti from 'canvas-confetti';
 import { type MealPlan, type Recipe } from '../lib/supabase';
 import { currentWeekStart, getOfflineMealPlans } from '../lib/mealPlanWeeks';
