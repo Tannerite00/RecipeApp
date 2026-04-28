@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'; 
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, X, ArrowLeft } from 'lucide-react';
+import { Search, X, ArrowLeft, ShieldAlert } from 'lucide-react';
 import { type Recipe } from '../lib/supabase';
 import { parseISO8601Duration, formatRecipeType } from '../lib/utils';
 import { StarRating } from '../components/StarRating';
-import { cacheGet, loadBundledRecipes } from '../lib/offlineCache';
+import { cacheGet, cacheSet, loadBundledRecipes } from '../lib/offlineCache';
 
 interface MealPlanPickState {
   pickRecipeForMealPlan: boolean;
@@ -12,6 +12,36 @@ interface MealPlanPickState {
   dayOfWeek: number;
   dayName: string;
   weekStart: string;
+}
+
+const ALLERGENS = [
+  { key: 'milk', label: 'Milk', terms: ['milk', 'cream', 'butter', 'cheese', 'yogurt', 'whey', 'casein', 'lactose', 'ghee'] },
+  { key: 'eggs', label: 'Eggs', terms: ['egg', 'eggs', 'meringue', 'mayonnaise'] },
+  { key: 'fish', label: 'Fish', terms: ['fish', 'salmon', 'tuna', 'cod', 'tilapia', 'anchovy', 'anchovies', 'sardine', 'sardines', 'trout', 'halibut', 'bass', 'swordfish', 'mahi', 'mackerel', 'snapper'] },
+  { key: 'crustaceans', label: 'Crustaceans', terms: ['shrimp', 'crab', 'lobster', 'crawfish', 'crayfish', 'prawn', 'prawns'] },
+  { key: 'mollusks', label: 'Mollusks (clams, mussels, oysters)', terms: ['clam', 'clams', 'mussel', 'mussels', 'oyster', 'oysters', 'scallop', 'scallops', 'squid', 'calamari', 'octopus', 'snail'] },
+  { key: 'peanuts', label: 'Peanuts', terms: ['peanut', 'peanuts'] },
+  { key: 'tree_nuts', label: 'Tree nuts', terms: ['almond', 'almonds', 'walnut', 'walnuts', 'pecan', 'pecans', 'cashew', 'cashews', 'pistachio', 'pistachios', 'hazelnut', 'hazelnuts', 'macadamia', 'pine nut', 'pine nuts', 'brazil nut'] },
+  { key: 'soybeans', label: 'Soybeans', terms: ['soy', 'soybean', 'soybeans', 'tofu', 'tempeh', 'edamame', 'miso', 'soy sauce'] },
+  { key: 'wheat', label: 'Wheat (gluten)', terms: ['wheat', 'flour', 'bread', 'breadcrumb', 'breadcrumbs', 'pasta', 'noodle', 'noodles', 'tortilla', 'pita', 'couscous', 'semolina', 'farina'] },
+  { key: 'barley', label: 'Barley (gluten)', terms: ['barley'] },
+  { key: 'rye', label: 'Rye (gluten)', terms: ['rye'] },
+  { key: 'oats', label: 'Oats (gluten)', terms: ['oat', 'oats', 'oatmeal'] },
+  { key: 'celery', label: 'Celery', terms: ['celery'] },
+  { key: 'mustard', label: 'Mustard', terms: ['mustard'] },
+  { key: 'sesame', label: 'Sesame', terms: ['sesame', 'tahini'] },
+  { key: 'lupin', label: 'Lupin (legume, common in EU foods)', terms: ['lupin', 'lupine', 'lupini'] },
+  { key: 'sulphites', label: 'Sulphites (preservatives, e.g., in wine/dried fruit)', terms: ['sulphite', 'sulfite', 'sulphites', 'sulfites', 'wine', 'dried fruit'] },
+];
+
+function recipeContainsAllergen(recipe: Recipe, allergenTerms: string[]): boolean {
+  return recipe.ingredients.some((ingredient) => {
+    const lower = ingredient.toLowerCase();
+    return allergenTerms.some((term) => {
+      const regex = new RegExp(`\\b${term}s?\\b`, 'i');
+      return regex.test(lower);
+    });
+  });
 }
 
 export function RecipeListPage() {
@@ -25,6 +55,12 @@ export function RecipeListPage() {
   const [loading, setLoading] = useState(true);
   const [recipeTypes, setRecipeTypes] = useState<string[]>([]);
   const [ratingStats, setRatingStats] = useState<Record<string, { average: number; count: number }>>({});
+  const [showAllergenModal, setShowAllergenModal] = useState(false);
+  const [selectedAllergens, setSelectedAllergens] = useState<Set<string>>(() => {
+    const cached = cacheGet<string[]>('allergen-filters');
+    return cached ? new Set(cached) : new Set();
+  });
+  const modalRef = useRef<HTMLDivElement>(null);
 
   const pickState = (location.state as MealPlanPickState | null)?.pickRecipeForMealPlan
     ? (location.state as MealPlanPickState)
@@ -50,7 +86,6 @@ export function RecipeListPage() {
       return;
     }
 
-    // First-ever launch with no cache -- try bundled fallback
     const bundled = await loadBundledRecipes();
     if (bundled && bundled.length) {
       setRecipes(bundled as Recipe[]);
@@ -64,6 +99,13 @@ export function RecipeListPage() {
 
   useEffect(() => {
     let filtered = recipes;
+
+    if (selectedAllergens.size > 0) {
+      const activeTerms = ALLERGENS
+        .filter((a) => selectedAllergens.has(a.key))
+        .flatMap((a) => a.terms);
+      filtered = filtered.filter((recipe) => !recipeContainsAllergen(recipe, activeTerms));
+    }
 
     if (selectedType) {
       filtered = filtered.filter(recipe => recipe.type === selectedType);
@@ -90,7 +132,33 @@ export function RecipeListPage() {
     }
 
     setFilteredRecipes(filtered);
-  }, [searchQuery, selectedType, searchMode, recipes]);
+  }, [searchQuery, selectedType, searchMode, recipes, selectedAllergens]);
+
+  function toggleAllergen(key: string) {
+    setSelectedAllergens((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      cacheSet('allergen-filters', Array.from(next));
+      return next;
+    });
+  }
+
+  function clearAllAllergens() {
+    setSelectedAllergens(new Set());
+    cacheSet('allergen-filters', []);
+  }
+
+  useEffect(() => {
+    if (!showAllergenModal) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
+        setShowAllergenModal(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showAllergenModal]);
 
   function handleRecipeClick(recipe: Recipe) {
     if (pickState) {
@@ -143,7 +211,7 @@ export function RecipeListPage() {
         </div>
 
         <div className="mb-8 space-y-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <div className="inline-flex rounded-lg border border-gray-300 bg-white">
               <button
                 onClick={() => setSearchMode('name')}
@@ -165,6 +233,75 @@ export function RecipeListPage() {
               >
                 By Ingredients
               </button>
+            </div>
+
+            <div className="relative">
+              <button
+                onClick={() => setShowAllergenModal(!showAllergenModal)}
+                className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                  selectedAllergens.size > 0
+                    ? 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100'
+                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <ShieldAlert className="w-4 h-4" />
+                Allergens
+                {selectedAllergens.size > 0 && (
+                  <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold bg-red-600 text-white rounded-full">
+                    {selectedAllergens.size}
+                  </span>
+                )}
+              </button>
+
+              {showAllergenModal && (
+                <div
+                  ref={modalRef}
+                  className="absolute left-0 top-full mt-2 z-50 w-[340px] sm:w-[400px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in"
+                  style={{ animation: 'fadeSlideIn 0.15s ease-out' }}
+                >
+                  <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShieldAlert className="w-4 h-4 text-red-600" />
+                      <h3 className="font-semibold text-gray-900 text-sm">Allergen Filters</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {selectedAllergens.size > 0 && (
+                        <button
+                          onClick={clearAllAllergens}
+                          className="text-xs text-red-600 hover:text-red-700 font-medium"
+                        >
+                          Clear all
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setShowAllergenModal(false)}
+                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <p className="px-4 pt-3 pb-2 text-xs text-gray-500">
+                    Check allergens to hide recipes containing them.
+                  </p>
+                  <div className="px-2 pb-3 max-h-[360px] overflow-y-auto">
+                    {ALLERGENS.map((allergen) => (
+                      <label
+                        key={allergen.key}
+                        className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedAllergens.has(allergen.key)}
+                          onChange={() => toggleAllergen(allergen.key)}
+                          className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 flex-shrink-0"
+                        />
+                        <span className="text-sm text-gray-800">{allergen.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -203,6 +340,32 @@ export function RecipeListPage() {
               </button>
             )}
           </div>
+
+          {selectedAllergens.size > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-medium text-red-600">Excluding:</span>
+              {ALLERGENS.filter((a) => selectedAllergens.has(a.key)).map((a) => (
+                <span
+                  key={a.key}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 border border-red-200 text-red-700 rounded-full text-xs font-medium"
+                >
+                  {a.label.split(' (')[0]}
+                  <button
+                    onClick={() => toggleAllergen(a.key)}
+                    className="hover:text-red-900 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+              <button
+                onClick={clearAllAllergens}
+                className="text-xs text-red-600 hover:text-red-700 font-medium underline"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
         </div>
 
         {loading ? (
@@ -212,7 +375,7 @@ export function RecipeListPage() {
         ) : filteredRecipes.length === 0 ? (
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="text-gray-500">
-              {searchQuery ? 'No recipes found matching your search' : 'No recipes available'}
+              {searchQuery || selectedAllergens.size > 0 ? 'No recipes found matching your filters' : 'No recipes available'}
             </div>
           </div>
         ) : (
