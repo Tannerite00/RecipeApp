@@ -64,11 +64,13 @@ export function AuthPage() {
       if (mode === 'signup') {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        setMessage('Account created! You are now signed in.');
+        navigate('/account', { state: { signedIn: true }, replace: true });
+        return;
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        setMessage('Signed in successfully.');
+        navigate('/account', { state: { signedIn: true }, replace: true });
+        return;
       }
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');

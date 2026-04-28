@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'; 
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Mail, Lock, LogOut, Calendar, Check, X, MessageCircle, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
@@ -20,6 +20,7 @@ const PASSWORD_RULES: { key: string; label: string; test: (v: string) => boolean
 
 export function AccountPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [newPassword, setNewPassword] = useState('');
@@ -27,6 +28,7 @@ export function AccountPage() {
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [signInToast, setSignInToast] = useState(false);
   const [userRatings, setUserRatings] = useState<
     { id: string; rating: number; updated_at: string; recipe: { id: string; title: string; type: string | null } | null }[]
   >([]);
@@ -42,7 +44,6 @@ export function AccountPage() {
       loadCachedData(cachedUser.id);
     }
 
-    // Auth check is necessary -- it validates the session is still valid
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
         setUser(data.user);
@@ -60,6 +61,15 @@ export function AccountPage() {
       }
     });
   }, [navigate]);
+
+  useEffect(() => {
+    if ((location.state as any)?.signedIn) {
+      setSignInToast(true);
+      window.history.replaceState({}, '');
+      const timer = setTimeout(() => setSignInToast(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [location.state]);
 
   function loadCachedData(uid: string) {
     const cachedRatings = cacheGet<typeof userRatings>(`user-ratings:${uid}`);
@@ -134,6 +144,15 @@ export function AccountPage() {
 
   return (
     <div className="min-h-[calc(100vh-3.5rem)] sm:min-h-[calc(100vh-4rem)] bg-gradient-to-br from-orange-50 to-amber-50 py-6 sm:py-10 px-4 sm:px-6 lg:px-8">
+
+      {signInToast && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 animate-fade-in-down">
+          <div className="bg-gray-900/80 backdrop-blur-sm text-white text-sm font-medium px-5 py-3 rounded-xl shadow-lg">
+            Signed in successfully.
+          </div>
+        </div>
+      )}
+
       <div className="w-full max-w-2xl mx-auto">
         <button
           onClick={() => navigate('/')}
