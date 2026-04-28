@@ -125,6 +125,8 @@ export function MealPlanPage() {
 
   function addRecipeToDay(mealPlanId: string, recipeId: string, dayOfWeek: number, recipeTitle: string) {
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const cachedRecipes = cacheGet<Recipe[]>('recipes');
+    const fullRecipe = cachedRecipes?.find(r => r.id === recipeId) ?? { id: recipeId, title: recipeTitle } as Recipe;
 
     setMealPlans(prev => {
       const updated = prev.map(plan => {
@@ -136,7 +138,7 @@ export function MealPlanPage() {
             ...updatedItems[dayOfWeek].entries,
             {
               itemId: tempId,
-              recipe: { id: recipeId, title: recipeTitle } as Recipe
+              recipe: fullRecipe
             }
           ]
         };
