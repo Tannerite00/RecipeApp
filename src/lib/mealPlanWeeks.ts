@@ -1,4 +1,3 @@
-import { supabase } from './supabase';
 import { cacheGet } from './offlineCache';
 
 const WEEKS_AHEAD = 2;
@@ -39,10 +38,6 @@ export function currentWeekStart(now: Date = new Date()): string {
   return toDateString(startOfWeekSunday(now));
 }
 
-function offlinePlanId(weekStart: string): string {
-  return `offline-${weekStart}`;
-}
-
 export interface CachedMealPlanRef {
   id: string;
   week_start_date: string;
@@ -60,42 +55,16 @@ export function getOfflineMealPlans(): CachedMealPlanRef[] {
   const have = new Set(plans.map((p) => p.week_start_date));
   for (const w of targetWeeks) {
     if (!have.has(w)) {
-      plans.push({ id: offlinePlanId(w), week_start_date: w });
+      plans.push({ id: `offline-${w}`, week_start_date: w });
     }
   }
 
   plans.sort((a, b) => a.week_start_date.localeCompare(b.week_start_date));
 
   const seen = new Set<string>();
-  const deduped = plans.filter((p) => {
+  return plans.filter((p) => {
     if (seen.has(p.week_start_date)) return false;
     seen.add(p.week_start_date);
     return true;
   });
-
-  return deduped;
-}
-
-export async function ensureMealPlanWeeks(): Promise<void> {
-  const targetWeeks = plannableWeekStarts();
-  const cutoff = cutoffWeekStart();
-
-  try {
-    const { data: existing, error } = await supabase
-      .from('meal_plans')
-      .select('week_start_date');
-    if (error) throw error;
-
-    const have = new Set((existing || []).map((p: { week_start_date: string }) => p.week_start_date));
-    const toCreate = targetWeeks.filter((w) => !have.has(w));
-    if (toCreate.length) {
-      await supabase
-        .from('meal_plans')
-        .insert(toCreate.map((w) => ({ week_start_date: w })));
-    }
-
-    await supabase.from('meal_plans').delete().lt('week_start_date', cutoff);
-  } catch {
-    // Offline -- plans will be created from cache/local fallback
-  }
 }

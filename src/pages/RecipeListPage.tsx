@@ -1,13 +1,22 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Search, X } from 'lucide-react';
-import { supabase, type Recipe } from '../lib/supabase';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Search, X, ArrowLeft } from 'lucide-react';
+import { type Recipe } from '../lib/supabase';
 import { parseISO8601Duration, formatRecipeType } from '../lib/utils';
 import { StarRating } from '../components/StarRating';
-import { cacheGet, cacheSet, loadBundledRecipes } from '../lib/offlineCache';
+import { cacheGet, loadBundledRecipes } from '../lib/offlineCache';
+
+interface MealPlanPickState {
+  pickRecipeForMealPlan: boolean;
+  mealPlanId: string;
+  dayOfWeek: number;
+  dayName: string;
+  weekStart: string;
+}
 
 export function RecipeListPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -17,13 +26,20 @@ export function RecipeListPage() {
   const [recipeTypes, setRecipeTypes] = useState<string[]>([]);
   const [ratingStats, setRatingStats] = useState<Record<string, { average: number; count: number }>>({});
 
+  const pickState = (location.state as MealPlanPickState | null)?.pickRecipeForMealPlan
+    ? (location.state as MealPlanPickState)
+    : null;
+
   useEffect(() => {
-    fetchRecipes();
-    fetchRatingStats();
+    loadFromCache();
   }, []);
 
-  async function fetchRecipes() {
+  async function loadFromCache() {
     const cached = cacheGet<Recipe[]>('recipes');
+    const cachedStats = cacheGet<Record<string, { average: number; count: number }>>('rating-stats');
+
+    if (cachedStats) setRatingStats(cachedStats);
+
     if (cached && cached.length) {
       setRecipes(cached);
       setFilteredRecipes(cached);
@@ -31,69 +47,19 @@ export function RecipeListPage() {
         Array.from(new Set(cached.map((r) => r.type).filter(Boolean))).sort()
       );
       setLoading(false);
+      return;
     }
 
-    try {
-      const { data, error } = await supabase
-        .from('recipes')
-        .select('*')
-        .order('title');
-
-      if (error) throw error;
-      const recipes = data || [];
-      setRecipes(recipes);
-      setFilteredRecipes(recipes);
+    // First-ever launch with no cache -- try bundled fallback
+    const bundled = await loadBundledRecipes();
+    if (bundled && bundled.length) {
+      setRecipes(bundled as Recipe[]);
+      setFilteredRecipes(bundled as Recipe[]);
       setRecipeTypes(
-        Array.from(new Set(recipes.map((r) => r.type).filter(Boolean))).sort()
+        Array.from(new Set((bundled as Recipe[]).map((r) => r.type).filter(Boolean))).sort()
       );
-      cacheSet('recipes', recipes);
-    } catch (err) {
-      if (!cached) {
-        const bundled = await loadBundledRecipes();
-        if (bundled && bundled.length) {
-          setRecipes(bundled as Recipe[]);
-          setFilteredRecipes(bundled as Recipe[]);
-          setRecipeTypes(
-            Array.from(new Set((bundled as Recipe[]).map((r) => r.type).filter(Boolean))).sort()
-          );
-          cacheSet('recipes', bundled);
-        } else {
-          console.error('Error fetching recipes:', err);
-        }
-      }
-    } finally {
-      setLoading(false);
     }
-  }
-
-  async function fetchRatingStats() {
-    const cached = cacheGet<Record<string, { average: number; count: number }>>(
-      'rating-stats'
-    );
-    if (cached) setRatingStats(cached);
-
-    try {
-      const { data, error } = await supabase
-        .from('recipe_ratings')
-        .select('recipe_id, rating');
-      if (error) throw error;
-
-      const acc: Record<string, { total: number; count: number }> = {};
-      (data || []).forEach((r: { recipe_id: string; rating: number }) => {
-        if (!acc[r.recipe_id]) acc[r.recipe_id] = { total: 0, count: 0 };
-        acc[r.recipe_id].total += r.rating;
-        acc[r.recipe_id].count += 1;
-      });
-
-      const stats: Record<string, { average: number; count: number }> = {};
-      Object.entries(acc).forEach(([id, v]) => {
-        stats[id] = { average: v.count ? v.total / v.count : 0, count: v.count };
-      });
-      setRatingStats(stats);
-      cacheSet('rating-stats', stats);
-    } catch (err) {
-      if (!cached) console.error('Error fetching rating stats:', err);
-    }
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -126,9 +92,51 @@ export function RecipeListPage() {
     setFilteredRecipes(filtered);
   }, [searchQuery, selectedType, searchMode, recipes]);
 
+  function handleRecipeClick(recipe: Recipe) {
+    if (pickState) {
+      navigate('/meal-plans', {
+        state: {
+          addRecipeToMealPlan: true,
+          mealPlanId: pickState.mealPlanId,
+          dayOfWeek: pickState.dayOfWeek,
+          recipeId: recipe.id,
+          recipeTitle: recipe.title,
+        },
+      });
+    } else {
+      navigate(`/recipe/${recipe.id}`);
+    }
+  }
+
+  function formatWeekLabel(weekStart: string): string {
+    const [y, m, d] = weekStart.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString();
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+
+        {pickState && (
+          <div className="mb-6 bg-blue-600 text-white rounded-xl p-4 sm:p-5 shadow-lg">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-bold text-lg">Select a recipe to add</p>
+                <p className="text-blue-100 text-sm mt-1">
+                  Adding to <span className="font-semibold text-white">{pickState.dayName}</span> &mdash; Week of {formatWeekLabel(pickState.weekStart)}
+                </p>
+              </div>
+              <button
+                onClick={() => navigate('/meal-plans')}
+                className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2">Recipe Collection</h1>
           <p className="text-sm sm:text-base text-gray-600">Browse and discover delicious recipes</p>
@@ -212,8 +220,10 @@ export function RecipeListPage() {
             {filteredRecipes.map((recipe) => (
               <button
                 key={recipe.id}
-                onClick={() => navigate(`/recipe/${recipe.id}`)}
-                className="bg-white rounded-lg shadow hover:shadow-lg transition p-4 sm:p-6 text-left hover:scale-105 transform duration-200"
+                onClick={() => handleRecipeClick(recipe)}
+                className={`bg-white rounded-lg shadow hover:shadow-lg transition p-4 sm:p-6 text-left hover:scale-105 transform duration-200 ${
+                  pickState ? 'ring-2 ring-transparent hover:ring-blue-400' : ''
+                }`}
               >
                 <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 line-clamp-2">{recipe.title}</h3>
                 <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">{formatRecipeType(recipe.type)}</p>

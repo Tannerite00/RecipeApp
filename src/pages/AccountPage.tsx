@@ -5,8 +5,9 @@ import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import { StarRating } from '../components/StarRating';
 import { Link } from 'react-router-dom';
-import { cacheGet, cacheSet } from '../lib/offlineCache';
+import { cacheGet, cacheSet, enqueueCommentOp } from '../lib/offlineCache';
 import { formatRecipeType } from '../lib/utils';
+import { markDirty, flushWrites } from '../lib/syncManager';
 
 const SPECIAL_CHARS = /[`!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/;
 
@@ -34,61 +35,48 @@ export function AccountPage() {
   >([]);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      setUser(data.user);
+    const cachedUser = cacheGet<User>('auth-user');
+    if (cachedUser) {
+      setUser(cachedUser);
       setLoading(false);
-      if (!data.user) {
+      loadCachedData(cachedUser.id);
+    }
+
+    // Auth check is necessary -- it validates the session is still valid
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        setUser(data.user);
+        cacheSet('auth-user', data.user);
+        setLoading(false);
+        loadCachedData(data.user.id);
+      } else if (!cachedUser) {
+        setLoading(false);
         navigate('/auth');
-        return;
       }
-      await loadUserRatings(data.user.id);
-      await loadUserComments(data.user.id);
+    }).catch(() => {
+      if (!cachedUser) {
+        setLoading(false);
+        navigate('/auth');
+      }
     });
   }, [navigate]);
 
-  async function loadUserRatings(uid: string) {
-    const cacheKey = `user-ratings:${uid}`;
-    const cached = cacheGet<typeof userRatings>(cacheKey);
-    if (cached) setUserRatings(cached);
+  function loadCachedData(uid: string) {
+    const cachedRatings = cacheGet<typeof userRatings>(`user-ratings:${uid}`);
+    if (cachedRatings) setUserRatings(cachedRatings);
 
-    const { data, error } = await supabase
-      .from('recipe_ratings')
-      .select('id, rating, updated_at, recipe:recipes(id, title, type)')
-      .eq('user_id', uid)
-      .order('updated_at', { ascending: false });
-    if (error) {
-      if (!cached) console.error('Error loading user ratings:', error);
-      return;
-    }
-    const rows = (data as any) || [];
-    setUserRatings(rows);
-    cacheSet(cacheKey, rows);
+    const cachedComments = cacheGet<typeof userComments>(`user-comments:${uid}`);
+    if (cachedComments) setUserComments(cachedComments);
   }
 
-  async function loadUserComments(uid: string) {
-    const cacheKey = `user-comments:${uid}`;
-    const cached = cacheGet<typeof userComments>(cacheKey);
-    if (cached) setUserComments(cached);
+  function handleDeleteComment(id: string) {
+    const updated = userComments.filter((x) => x.id !== id);
+    setUserComments(updated);
+    if (user) cacheSet(`user-comments:${user.id}`, updated);
 
-    const { data, error } = await supabase
-      .from('recipe_comments')
-      .select('id, content, created_at, recipe:recipes(id, title)')
-      .eq('user_id', uid)
-      .order('created_at', { ascending: false });
-    if (error) {
-      if (!cached) console.error('Error loading user comments:', error);
-      return;
-    }
-    const rows = (data as any) || [];
-    setUserComments(rows);
-    cacheSet(cacheKey, rows);
-  }
-
-  async function handleDeleteComment(id: string) {
-    const prev = userComments;
-    setUserComments((c) => c.filter((x) => x.id !== id));
-    const { error } = await supabase.from('recipe_comments').delete().eq('id', id);
-    if (error) setUserComments(prev);
+    enqueueCommentOp({ kind: 'delete', commentId: id, createdAt: new Date().toISOString() });
+    markDirty();
+    void flushWrites();
   }
 
   const ruleResults = useMemo(
@@ -142,7 +130,7 @@ export function AccountPage() {
 
   if (!user) return null;
 
-  const joinedAt = user.created_at ? new Date(user.created_at).toLocaleDateString() : '—';
+  const joinedAt = user.created_at ? new Date(user.created_at).toLocaleDateString() : '\u2014';
 
   return (
     <div className="min-h-[calc(100vh-3.5rem)] sm:min-h-[calc(100vh-4rem)] bg-gradient-to-br from-orange-50 to-amber-50 py-6 sm:py-10 px-4 sm:px-6 lg:px-8">
@@ -157,9 +145,7 @@ export function AccountPage() {
 
         <div className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">Account</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-2">
-            Manage your profile and credentials
-          </p>
+          <p className="text-sm sm:text-base text-gray-600 mt-2">Manage your profile and credentials</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 mb-6">
@@ -170,23 +156,16 @@ export function AccountPage() {
                 <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wide">
-                  Email Address
-                </p>
-                <p className="text-sm sm:text-base text-gray-900 font-medium break-all">
-                  {user.email}
-                </p>
+                <p className="text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wide">Email Address</p>
+                <p className="text-sm sm:text-base text-gray-900 font-medium break-all">{user.email}</p>
               </div>
             </div>
-
             <div className="flex items-start gap-3 py-3">
               <div className="bg-orange-100 rounded-lg p-2 flex-shrink-0">
                 <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wide">
-                  Member Since
-                </p>
+                <p className="text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wide">Member Since</p>
                 <p className="text-sm sm:text-base text-gray-900 font-medium">{joinedAt}</p>
               </div>
             </div>
@@ -195,15 +174,11 @@ export function AccountPage() {
 
         <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 mb-6">
           <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">Your Ratings</h2>
-          <p className="text-sm text-gray-600 mb-4">
-            Recipes you've rated ({userRatings.length})
-          </p>
+          <p className="text-sm text-gray-600 mb-4">Recipes you've rated ({userRatings.length})</p>
           {userRatings.length === 0 ? (
             <p className="text-sm text-gray-500">
               You haven't rated any recipes yet. Browse the{' '}
-              <Link to="/" className="text-orange-600 hover:text-orange-700 font-medium">
-                recipe collection
-              </Link>{' '}
+              <Link to="/" className="text-orange-600 hover:text-orange-700 font-medium">recipe collection</Link>{' '}
               to leave your first rating.
             </p>
           ) : (
@@ -212,20 +187,11 @@ export function AccountPage() {
                 <li key={r.id} className="py-3 flex items-center justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     {r.recipe ? (
-                      <Link
-                        to={`/recipe/${r.recipe.id}`}
-                        className="block text-sm sm:text-base font-medium text-gray-900 hover:text-orange-700 truncate"
-                      >
-                        {r.recipe.title}
-                      </Link>
+                      <Link to={`/recipe/${r.recipe.id}`} className="block text-sm sm:text-base font-medium text-gray-900 hover:text-orange-700 truncate">{r.recipe.title}</Link>
                     ) : (
-                      <span className="block text-sm sm:text-base font-medium text-gray-500 italic">
-                        Recipe removed
-                      </span>
+                      <span className="block text-sm sm:text-base font-medium text-gray-500 italic">Recipe removed</span>
                     )}
-                    {r.recipe?.type && (
-                      <p className="text-xs text-gray-500 mt-0.5">{formatRecipeType(r.recipe.type)}</p>
-                    )}
+                    {r.recipe?.type && <p className="text-xs text-gray-500 mt-0.5">{formatRecipeType(r.recipe.type)}</p>}
                   </div>
                   <StarRating value={r.rating} readOnly showCount={false} size="sm" />
                 </li>
@@ -239,13 +205,9 @@ export function AccountPage() {
             <MessageCircle className="w-5 h-5 text-orange-600" />
             <h2 className="text-lg sm:text-xl font-bold text-gray-900">Your Comments</h2>
           </div>
-          <p className="text-sm text-gray-600 mb-4">
-            Comments you've posted ({userComments.length})
-          </p>
+          <p className="text-sm text-gray-600 mb-4">Comments you've posted ({userComments.length})</p>
           {userComments.length === 0 ? (
-            <p className="text-sm text-gray-500">
-              You haven't commented on any recipes yet.
-            </p>
+            <p className="text-sm text-gray-500">You haven't commented on any recipes yet.</p>
           ) : (
             <ul className="divide-y divide-gray-100">
               {userComments.map((c) => (
@@ -253,25 +215,12 @@ export function AccountPage() {
                   <div className="flex items-start justify-between gap-3 mb-1">
                     <div className="min-w-0 flex-1">
                       {c.recipe ? (
-                        <Link
-                          to={`/recipe/${c.recipe.id}`}
-                          className="block text-sm sm:text-base font-medium text-gray-900 hover:text-orange-700 truncate"
-                        >
-                          {c.recipe.title}
-                        </Link>
+                        <Link to={`/recipe/${c.recipe.id}`} className="block text-sm sm:text-base font-medium text-gray-900 hover:text-orange-700 truncate">{c.recipe.title}</Link>
                       ) : (
-                        <span className="block text-sm sm:text-base font-medium text-gray-500 italic">
-                          Recipe removed
-                        </span>
+                        <span className="block text-sm sm:text-base font-medium text-gray-500 italic">Recipe removed</span>
                       )}
                       <p className="text-xs text-gray-500 mt-0.5">
-                        {new Date(c.created_at).toLocaleString(undefined, {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
+                        {new Date(c.created_at).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                       </p>
                     </div>
                     <button
@@ -282,9 +231,7 @@ export function AccountPage() {
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">
-                    {c.content}
-                  </p>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">{c.content}</p>
                 </li>
               ))}
             </ul>
@@ -295,105 +242,38 @@ export function AccountPage() {
           <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Change Password</h2>
           <form onSubmit={handleChangePassword} className="space-y-4" noValidate>
             <div>
-              <label
-                htmlFor="newPassword"
-                className="block text-sm font-medium text-gray-700 mb-1.5"
-              >
-                New Password
-              </label>
+              <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1.5">New Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  id="newPassword"
-                  type="password"
-                  required
-                  autoComplete="new-password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Create a strong password"
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm sm:text-base"
-                />
+                <input id="newPassword" type="password" required autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Create a strong password" className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm sm:text-base" />
               </div>
-
               <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
                 {ruleResults.map((rule) => (
-                  <li
-                    key={rule.key}
-                    className={`flex items-center gap-2 text-xs transition-colors ${
-                      rule.valid ? 'text-green-600' : 'text-gray-500'
-                    }`}
-                  >
-                    {rule.valid ? (
-                      <Check className="w-3.5 h-3.5 flex-shrink-0" />
-                    ) : (
-                      <X className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
-                    )}
+                  <li key={rule.key} className={`flex items-center gap-2 text-xs transition-colors ${rule.valid ? 'text-green-600' : 'text-gray-500'}`}>
+                    {rule.valid ? <Check className="w-3.5 h-3.5 flex-shrink-0" /> : <X className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />}
                     <span>{rule.label}</span>
                   </li>
                 ))}
               </ul>
             </div>
-
             <div>
-              <label
-                htmlFor="confirmPassword"
-                className="block text-sm font-medium text-gray-700 mb-1.5"
-              >
-                Confirm New Password
-              </label>
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1.5">Confirm New Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  id="confirmPassword"
-                  type="password"
-                  required
-                  autoComplete="new-password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Re-enter your new password"
-                  className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent text-sm sm:text-base ${
-                    confirmPassword.length > 0 && !isPasswordMatch
-                      ? 'border-red-300 focus:ring-red-500'
-                      : 'border-gray-300 focus:ring-orange-500'
-                  }`}
-                />
+                <input id="confirmPassword" type="password" required autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Re-enter your new password" className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent text-sm sm:text-base ${confirmPassword.length > 0 && !isPasswordMatch ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-orange-500'}`} />
               </div>
-              {confirmPassword.length > 0 && !isPasswordMatch && (
-                <p className="mt-1.5 text-xs text-red-600">Passwords do not match.</p>
-              )}
+              {confirmPassword.length > 0 && !isPasswordMatch && <p className="mt-1.5 text-xs text-red-600">Passwords do not match.</p>}
             </div>
-
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-2.5">
-                {error}
-              </div>
-            )}
-
-            {message && (
-              <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-2.5">
-                {message}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={updating || !canUpdate}
-              className="w-full sm:w-auto bg-orange-600 hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium px-6 py-2.5 sm:py-3 rounded-lg transition text-sm sm:text-base"
-            >
-              {updating ? 'Updating...' : 'Update Password'}
-            </button>
+            {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-2.5">{error}</div>}
+            {message && <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-2.5">{message}</div>}
+            <button type="submit" disabled={updating || !canUpdate} className="w-full sm:w-auto bg-orange-600 hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium px-6 py-2.5 sm:py-3 rounded-lg transition text-sm sm:text-base">{updating ? 'Updating...' : 'Update Password'}</button>
           </form>
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8">
           <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Sign Out</h2>
-          <p className="text-sm text-gray-600 mb-4">
-            Sign out of your account on this device.
-          </p>
-          <button
-            onClick={handleLogout}
-            className="flex items-center justify-center gap-2 w-full sm:w-auto bg-white border border-red-300 text-red-600 hover:bg-red-50 font-medium px-6 py-2.5 sm:py-3 rounded-lg transition text-sm sm:text-base"
-          >
+          <p className="text-sm text-gray-600 mb-4">Sign out of your account on this device.</p>
+          <button onClick={handleLogout} className="flex items-center justify-center gap-2 w-full sm:w-auto bg-white border border-red-300 text-red-600 hover:bg-red-50 font-medium px-6 py-2.5 sm:py-3 rounded-lg transition text-sm sm:text-base">
             <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
             Log Out
           </button>

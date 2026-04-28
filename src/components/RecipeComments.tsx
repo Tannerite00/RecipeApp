@@ -1,7 +1,9 @@
 import { useEffect, useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MessageCircle, Trash2, Send } from 'lucide-react';
-import { supabase, usernameFromEmail, type RecipeComment } from '../lib/supabase';
+import { usernameFromEmail, type RecipeComment } from '../lib/supabase';
+import { cacheGet, cacheSet, enqueueCommentOp } from '../lib/offlineCache';
+import { markDirty, flushWrites } from '../lib/syncManager';
 
 interface Props {
   recipeId: string;
@@ -32,25 +34,18 @@ export function RecipeComments({ recipeId }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setCurrentUserId(data.user?.id ?? null);
-      setCurrentEmail(data.user?.email ?? null);
-    });
-    fetchComments();
+    const cachedUser = cacheGet<{ id: string; email: string }>('auth-user');
+    if (cachedUser) {
+      setCurrentUserId(cachedUser.id);
+      setCurrentEmail(cachedUser.email);
+    }
+
+    const cached = cacheGet<RecipeComment[]>(`comments:${recipeId}`);
+    setComments(cached || []);
+    setLoading(false);
   }, [recipeId]);
 
-  async function fetchComments() {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('recipe_comments')
-      .select('*')
-      .eq('recipe_id', recipeId)
-      .order('created_at', { ascending: false });
-    if (!error) setComments((data as RecipeComment[]) || []);
-    setLoading(false);
-  }
-
-  async function handleSubmit(e: FormEvent) {
+  function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     if (!currentUserId) {
@@ -60,33 +55,44 @@ export function RecipeComments({ recipeId }: Props) {
     const content = draft.trim();
     if (!content) return;
     setSubmitting(true);
-    const { data, error } = await supabase
-      .from('recipe_comments')
-      .insert({
-        user_id: currentUserId,
-        recipe_id: recipeId,
-        user_email: currentEmail ?? '',
-        content,
-      })
-      .select()
-      .maybeSingle();
-    setSubmitting(false);
-    if (error) {
-      setError('Could not post your comment. Please try again.');
-      return;
-    }
-    if (data) setComments((prev) => [data as RecipeComment, ...prev]);
+
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    enqueueCommentOp({
+      kind: 'add',
+      tempId,
+      userId: currentUserId,
+      recipeId,
+      userEmail: currentEmail ?? '',
+      content,
+      createdAt: new Date().toISOString(),
+    });
+    markDirty();
+
+    const offlineComment: RecipeComment = {
+      id: tempId,
+      user_id: currentUserId,
+      recipe_id: recipeId,
+      user_email: currentEmail ?? '',
+      content,
+      created_at: new Date().toISOString(),
+    };
+    const updated = [offlineComment, ...comments];
+    setComments(updated);
+    cacheSet(`comments:${recipeId}`, updated);
     setDraft('');
+    setSubmitting(false);
+    void flushWrites();
   }
 
-  async function handleDelete(id: string) {
-    const prev = comments;
-    setComments((c) => c.filter((x) => x.id !== id));
-    const { error } = await supabase.from('recipe_comments').delete().eq('id', id);
-    if (error) {
-      setComments(prev);
-      setError('Could not delete that comment.');
-    }
+  function handleDelete(id: string) {
+    const updated = comments.filter((x) => x.id !== id);
+    setComments(updated);
+    cacheSet(`comments:${recipeId}`, updated);
+
+    enqueueCommentOp({ kind: 'delete', commentId: id, createdAt: new Date().toISOString() });
+    markDirty();
+    void flushWrites();
   }
 
   return (

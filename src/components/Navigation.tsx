@@ -2,17 +2,18 @@ import { ChefHat, LogIn, CircleUser as UserCircle2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import type { Session } from '@supabase/supabase-js';
+import { cacheGet } from '../lib/offlineCache';
 
 export function Navigation() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [session, setSession] = useState<Session | null>(null);
+  const [loggedIn, setLoggedIn] = useState<boolean>(() => {
+    return cacheGet<{ id: string }>('auth-user') !== null;
+  });
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
+      setLoggedIn(!!newSession);
     });
     return () => {
       listener.subscription.unsubscribe();
@@ -63,7 +64,7 @@ export function Navigation() {
               <span className="sm:hidden">Grocery</span>
               <span className="hidden sm:inline">Grocery List</span>
             </button>
-            {session ? (
+            {loggedIn ? (
               <button
                 onClick={() => navigate('/account')}
                 className={`ml-1 sm:ml-2 flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-base font-medium transition ${

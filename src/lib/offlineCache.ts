@@ -1,5 +1,7 @@
 const PREFIX = 'recipehub:v1:';
 const QUEUE_KEY = `${PREFIX}rating-queue`;
+const MEAL_PLAN_QUEUE_KEY = `${PREFIX}meal-plan-queue`;
+const COMMENT_QUEUE_KEY = `${PREFIX}comment-queue`;
 
 export function cacheGet<T>(key: string): T | null {
   try {
@@ -17,6 +19,8 @@ export function cacheSet<T>(key: string, value: T): void {
     // Quota exceeded or storage disabled — fail silently.
   }
 }
+
+// --- Rating queue ---
 
 export interface QueuedRating {
   user_id: string;
@@ -48,6 +52,8 @@ export function enqueueRating(entry: QueuedRating): void {
   writeRatingQueue(queue);
 }
 
+// --- Meal plan operation queue ---
+
 export interface QueuedMealPlanAdd {
   kind: 'add';
   tempId: string;
@@ -65,8 +71,6 @@ export interface QueuedMealPlanDelete {
 
 export type QueuedMealPlanOp = QueuedMealPlanAdd | QueuedMealPlanDelete;
 
-const MEAL_PLAN_QUEUE_KEY = `${PREFIX}meal-plan-queue`;
-
 export function readMealPlanQueue(): QueuedMealPlanOp[] {
   try {
     const raw = localStorage.getItem(MEAL_PLAN_QUEUE_KEY);
@@ -79,9 +83,7 @@ export function readMealPlanQueue(): QueuedMealPlanOp[] {
 export function writeMealPlanQueue(queue: QueuedMealPlanOp[]): void {
   try {
     localStorage.setItem(MEAL_PLAN_QUEUE_KEY, JSON.stringify(queue));
-  } catch {
-    // ignore
-  }
+  } catch {}
 }
 
 export function enqueueMealPlanOp(op: QueuedMealPlanOp): void {
@@ -99,6 +101,59 @@ export function enqueueMealPlanOp(op: QueuedMealPlanOp): void {
   queue.push(op);
   writeMealPlanQueue(queue);
 }
+
+// --- Comment operation queue ---
+
+export interface QueuedCommentAdd {
+  kind: 'add';
+  tempId: string;
+  userId: string;
+  recipeId: string;
+  userEmail: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface QueuedCommentDelete {
+  kind: 'delete';
+  commentId: string;
+  createdAt: string;
+}
+
+export type QueuedCommentOp = QueuedCommentAdd | QueuedCommentDelete;
+
+export function readCommentQueue(): QueuedCommentOp[] {
+  try {
+    const raw = localStorage.getItem(COMMENT_QUEUE_KEY);
+    return raw ? (JSON.parse(raw) as QueuedCommentOp[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeCommentQueue(queue: QueuedCommentOp[]): void {
+  try {
+    localStorage.setItem(COMMENT_QUEUE_KEY, JSON.stringify(queue));
+  } catch {}
+}
+
+export function enqueueCommentOp(op: QueuedCommentOp): void {
+  const queue = readCommentQueue();
+  if (op.kind === 'delete') {
+    const addIdx = queue.findIndex(
+      (q) => q.kind === 'add' && q.tempId === op.commentId
+    );
+    if (addIdx !== -1) {
+      queue.splice(addIdx, 1);
+      writeCommentQueue(queue);
+      return;
+    }
+  }
+  queue.push(op);
+  writeCommentQueue(queue);
+}
+
+// --- Bundled recipe fallback ---
 
 function seedId(title: string, url: string | undefined): string {
   const input = `${title}|${url ?? ''}`;

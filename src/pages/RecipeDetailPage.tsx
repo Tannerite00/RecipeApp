@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Plus } from 'lucide-react';
-import { supabase, type Recipe } from '../lib/supabase';
+import { type Recipe } from '../lib/supabase';
 import { parseISO8601Duration } from '../lib/utils';
 import { StarRating } from '../components/StarRating';
 import { RecipeComments } from '../components/RecipeComments';
-import { ensureMealPlanWeeks, cutoffWeekStart, currentWeekStart, getOfflineMealPlans } from '../lib/mealPlanWeeks';
+import { currentWeekStart, getOfflineMealPlans } from '../lib/mealPlanWeeks';
 import { cacheGet, cacheSet, enqueueRating, enqueueMealPlanOp } from '../lib/offlineCache';
-import { flushRatingQueue } from '../lib/ratingSync';
+import { markDirty, flushWrites } from '../lib/syncManager';
 
 export function RecipeDetailPage() {
   const { id } = useParams();
@@ -30,43 +30,40 @@ export function RecipeDetailPage() {
   const backText = isFromMealPlan ? 'Back to Meal Plan' : 'Back to Recipes';
 
   useEffect(() => {
-    fetchRecipe();
-    fetchMealPlans();
-    loadRatings();
+    loadFromCache();
   }, [id]);
 
-  async function loadRatings() {
+  function loadFromCache() {
     if (!id) return;
 
-    const cachedStats = cacheGet<Record<string, { average: number; count: number }>>(
-      'rating-stats'
-    );
+    // Recipe
+    const cached = cacheGet<Recipe[]>('recipes');
+    const match = cached?.find((r) => r.id === id) ?? null;
+    setRecipe(match);
+    setLoading(false);
+
+    // Rating stats
+    const cachedStats = cacheGet<Record<string, { average: number; count: number }>>('rating-stats');
     if (cachedStats?.[id]) {
       setRatingAverage(cachedStats[id].average);
       setRatingCount(cachedStats[id].count);
     }
 
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      setCurrentUserId(userData.user?.id ?? null);
+    // User
+    const cachedUser = cacheGet<{ id: string }>('auth-user');
+    setCurrentUserId(cachedUser?.id ?? null);
 
-      const { data: all, error: allErr } = await supabase
-        .from('recipe_ratings')
-        .select('rating, user_id')
-        .eq('recipe_id', id);
-      if (allErr) throw allErr;
-
-      const rows = all || [];
-      const count = rows.length;
-      const average = count ? rows.reduce((a, r) => a + r.rating, 0) / count : 0;
-      setRatingCount(count);
-      setRatingAverage(average);
-    } catch {
-      // keep cached values
+    // Meal plans
+    const offlinePlans = getOfflineMealPlans();
+    if (offlinePlans.length) {
+      setMealPlans(offlinePlans);
+      const thisWeek = currentWeekStart();
+      const initial = offlinePlans.find((p) => p.week_start_date === thisWeek) ?? offlinePlans[0];
+      setSelectedMealPlan(initial.id);
     }
   }
 
-  async function handleRate(rating: number) {
+  function handleRate(rating: number) {
     setRatingMessage(null);
     if (!currentUserId) {
       navigate('/auth');
@@ -78,163 +75,64 @@ export function RecipeDetailPage() {
     myCache[id] = rating;
     cacheSet('my-ratings', myCache);
 
-    const entry = {
+    enqueueRating({
       user_id: currentUserId,
       recipe_id: id,
       rating,
       updated_at: new Date().toISOString(),
-    };
+    });
+    markDirty();
 
-    try {
-      const { error } = await supabase
-        .from('recipe_ratings')
-        .upsert(entry, { onConflict: 'user_id,recipe_id' });
-      if (error) throw error;
-      await flushRatingQueue();
-      await loadRatings();
-      setRatingMessage('Thanks for rating!');
-    } catch {
-      enqueueRating(entry);
-      setRatingMessage("You're offline. Your rating will sync when you reconnect.");
-    }
+    // Optimistically update local rating stats
+    const stats = cacheGet<Record<string, { average: number; count: number }>>('rating-stats') || {};
+    const existing = stats[id] || { average: 0, count: 0 };
+    const newCount = existing.count + 1;
+    const newAverage = (existing.average * existing.count + rating) / newCount;
+    stats[id] = { average: newAverage, count: newCount };
+    cacheSet('rating-stats', stats);
+    setRatingAverage(newAverage);
+    setRatingCount(newCount);
+
+    setRatingMessage('Rating saved! It will sync in the background.');
+    void flushWrites();
   }
 
-  async function fetchRecipe() {
-    const cached = cacheGet<Recipe[]>('recipes');
-    const cachedMatch = cached?.find((r) => r.id === id) ?? null;
-    if (cachedMatch) {
-      setRecipe(cachedMatch);
-      setLoading(false);
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('recipes')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
-
-      if (error) throw error;
-      if (data) setRecipe(data);
-    } catch (err) {
-      if (!cachedMatch) console.error('Error fetching recipe:', err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function fetchMealPlans() {
-    const offlinePlans = getOfflineMealPlans();
-    if (offlinePlans.length) {
-      setMealPlans(offlinePlans);
-      const thisWeek = currentWeekStart();
-      const initial = offlinePlans.find((p) => p.week_start_date === thisWeek) ?? offlinePlans[0];
-      setSelectedMealPlan(initial.id);
-    }
-
-    try {
-      await ensureMealPlanWeeks();
-
-      const { data, error } = await supabase
-        .from('meal_plans')
-        .select('id, week_start_date')
-        .order('week_start_date', { ascending: true });
-
-      if (error) throw error;
-
-      const cutoff = cutoffWeekStart();
-      const seen = new Set<string>();
-      const unique = (data || [])
-        .filter((p) => p.week_start_date >= cutoff)
-        .filter((p) => {
-          if (seen.has(p.week_start_date)) return false;
-          seen.add(p.week_start_date);
-          return true;
-        });
-
-      setMealPlans(unique);
-      cacheSet('detail-meal-plans', unique);
-      if (unique.length > 0) {
-        const thisWeek = currentWeekStart();
-        const initial = unique.find((p) => p.week_start_date === thisWeek) ?? unique[0];
-        setSelectedMealPlan(initial.id);
-      }
-    } catch {
-      // keep offline plans
-    }
-  }
-
-  async function addToMealPlan() {
+  function addToMealPlan() {
     if (!selectedMealPlan || selectedDayIndex === '' || !id) return;
 
     setAddedMessage(null);
 
-    try {
-      let realPlanId = selectedMealPlan;
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    enqueueMealPlanOp({
+      kind: 'add',
+      tempId,
+      mealPlanId: selectedMealPlan,
+      recipeId: id,
+      dayOfWeek: selectedDayIndex as number,
+      createdAt: new Date().toISOString(),
+    });
+    markDirty();
 
-      if (selectedMealPlan.startsWith('offline-')) {
-        const weekStart = selectedMealPlan.replace('offline-', '');
-        const { data: plans } = await supabase
-          .from('meal_plans')
-          .select('id')
-          .eq('week_start_date', weekStart)
-          .limit(1);
-
-        if (plans && plans.length) {
-          realPlanId = plans[0].id;
-        } else {
-          const { data: created } = await supabase
-            .from('meal_plans')
-            .insert({ week_start_date: weekStart })
-            .select('id')
-            .single();
-          if (created) realPlanId = created.id;
-          else throw new Error('offline');
-        }
-      }
-
-      const { error } = await supabase
-        .from('meal_plan_items')
-        .insert({
-          meal_plan_id: realPlanId,
-          recipe_id: id,
-          day_of_week: selectedDayIndex
+    // Update meal-plans cache so MealPlanPage shows it
+    const cachedPlans = cacheGet<any[]>('meal-plans');
+    if (cachedPlans) {
+      const plan = cachedPlans.find((p: any) => p.id === selectedMealPlan);
+      if (plan && plan.items) {
+        const day = selectedDayIndex as number;
+        const cachedRecipes = cacheGet<Recipe[]>('recipes');
+        const match = cachedRecipes?.find((r) => r.id === id);
+        plan.items[day].entries.push({
+          itemId: tempId,
+          recipe: match ?? { id, title: recipe?.title ?? '' },
         });
-
-      if (error) throw error;
-      setShowMealPlanModal(false);
-      setSelectedDayIndex('');
-      setAddedMessage(null);
-    } catch {
-      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      enqueueMealPlanOp({
-        kind: 'add',
-        tempId,
-        mealPlanId: selectedMealPlan,
-        recipeId: id,
-        dayOfWeek: selectedDayIndex as number,
-        createdAt: new Date().toISOString(),
-      });
-
-      const cachedPlans = cacheGet<any[]>('meal-plans');
-      if (cachedPlans) {
-        const plan = cachedPlans.find((p: any) => p.id === selectedMealPlan);
-        if (plan && plan.items) {
-          const day = selectedDayIndex as number;
-          const cachedRecipes = cacheGet<Recipe[]>('recipes');
-          const matchedRecipe = cachedRecipes?.find((r) => r.id === id);
-          plan.items[day].entries.push({
-            itemId: tempId,
-            recipe: matchedRecipe ?? { id, title: recipe?.title ?? '' },
-          });
-          cacheSet('meal-plans', cachedPlans);
-        }
+        cacheSet('meal-plans', cachedPlans);
       }
-
-      setShowMealPlanModal(false);
-      setSelectedDayIndex('');
-      setAddedMessage('Added offline. It will sync when you reconnect.');
     }
+
+    setShowMealPlanModal(false);
+    setSelectedDayIndex('');
+    setAddedMessage('Added to meal plan!');
+    void flushWrites();
   }
 
   function formatDayOption(weekStart: string, offset: number): string {
@@ -283,7 +181,7 @@ export function RecipeDetailPage() {
               Add to Meal Plan
             </button>
             {addedMessage && (
-              <p className="mt-2 text-sm text-amber-600">{addedMessage}</p>
+              <p className="mt-2 text-sm text-green-600">{addedMessage}</p>
             )}
           </div>
 
