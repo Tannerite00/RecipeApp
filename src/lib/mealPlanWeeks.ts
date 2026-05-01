@@ -4,25 +4,23 @@ const WEEKS_AHEAD = 2;
 const WEEKS_RETAINED = 8;
 
 export function startOfWeekSunday(d: Date = new Date()): Date {
-  const date = new Date(d);
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() - date.getDay());
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = date.getUTCDay();
+  date.setUTCDate(date.getUTCDate() - day);
   return date;
 }
 
 export function toDateString(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return d.toISOString().slice(0, 10);
 }
 
 export function plannableWeekStarts(now: Date = new Date()): string[] {
   const base = startOfWeekSunday(now);
   const weeks: string[] = [];
+
   for (let i = 0; i <= WEEKS_AHEAD; i++) {
     const d = new Date(base);
-    d.setDate(d.getDate() + i * 7);
+    d.setUTCDate(d.getUTCDate() + i * 7); // ✅ UTC safe
     weeks.push(toDateString(d));
   }
   return weeks;
@@ -30,7 +28,7 @@ export function plannableWeekStarts(now: Date = new Date()): string[] {
 
 export function cutoffWeekStart(now: Date = new Date()): string {
   const base = startOfWeekSunday(now);
-  base.setDate(base.getDate() - 7 * WEEKS_RETAINED);
+  base.setUTCDate(base.getUTCDate() - 7 * WEEKS_RETAINED);
   return toDateString(base);
 }
 
