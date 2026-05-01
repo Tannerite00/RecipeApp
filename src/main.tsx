@@ -17,3 +17,13 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>
 );
+
+const CLEAN_VERSION = 'v2';
+
+const current = localStorage.getItem('cache-version');
+
+if (current !== CLEAN_VERSION) {
+  localStorage.removeItem('detail-meal-plans');
+  localStorage.removeItem('meal-plans');
+  localStorage.setItem('cache-version', CLEAN_VERSION);
+}
