@@ -47,7 +47,6 @@ export function getOfflineMealPlans(): CachedMealPlanRef[] {
   const now = new Date();
   const base = startOfWeekSunday(now);
 
-  // ✅ Build FULL timeline: past + current + future
   const allWeeks: string[] = [];
 
   for (let i = -WEEKS_RETAINED; i <= WEEKS_AHEAD; i++) {
@@ -58,13 +57,11 @@ export function getOfflineMealPlans(): CachedMealPlanRef[] {
 
   const validWeekSet = new Set(allWeeks);
 
-  // ✅ Normalize cached data to only valid weeks
   const normalized: CachedMealPlanRef[] = [];
 
   const map = new Map<string, CachedMealPlanRef>();
 
   for (const plan of cached) {
-    // ❌ drop invalid weeks (like 4/20)
     if (!validWeekSet.has(plan.week_start_date)) continue;
 
     // ✅ keep only one per week
@@ -73,7 +70,6 @@ export function getOfflineMealPlans(): CachedMealPlanRef[] {
     }
   }
 
-  // ✅ Ensure ALL weeks exist
   for (const week of allWeeks) {
     if (!map.has(week)) {
       map.set(week, {
