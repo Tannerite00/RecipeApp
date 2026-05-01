@@ -1,11 +1,11 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Trash2, Plus, GripVertical, ChevronDown } from 'lucide-react';
+import { Trash2, Plus, Minus, GripVertical } from 'lucide-react';
 import { type MealPlan, type Recipe } from '../lib/supabase';
 import { cutoffWeekStart, currentWeekStart, plannableWeekStarts } from '../lib/mealPlanWeeks';
 import { cacheGet, cacheSet, enqueueMealPlanOp, getServingOverrides, setServingOverride, removeServingOverride } from '../lib/offlineCache';
 import { markDirty, flushWrites } from '../lib/syncManager';
-import { parseServingCount, generateServingOptions } from '../lib/servingScale';
+import { parseServingCount } from '../lib/servingScale';
 
 interface MealPlanItemEntry {
   itemId: string;
@@ -334,7 +334,6 @@ export function MealPlanPage() {
 
                       {selectedPlan.items[idx]?.entries.map(({ itemId, recipe }) => {
                         const baseCount = parseServingCount(recipe.servings);
-                        const options = baseCount ? generateServingOptions(baseCount) : [];
                         const currentServings = servingOverrides[itemId] ?? baseCount;
 
                         return (
@@ -354,30 +353,38 @@ export function MealPlanPage() {
                                 >
                                   {recipe.title}
                                 </button>
-                                {baseCount && options.length > 1 ? (
+                                {baseCount ? (
                                   <div className="flex items-center gap-1.5 mt-1" onClick={(e) => e.stopPropagation()}>
                                     <span className="text-xs text-gray-500">Servings:</span>
-                                    <div className="relative inline-block">
-                                      <select
-                                        value={currentServings ?? baseCount}
-                                        onChange={(e) => {
-                                          e.stopPropagation();
-                                          handleServingChange(itemId, recipe, Number(e.target.value));
-                                        }}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        className="appearance-none text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded pl-2 pr-5 py-0.5 cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                      >
-                                        {options.map((s) => (
-                                          <option key={s} value={s}>
-                                            {s}{s === baseCount ? ' (original)' : ''}
-                                          </option>
-                                        ))}
-                                      </select>
-                                      <ChevronDown className="absolute right-1 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
-                                    </div>
+                                    <button
+                                      type="button"
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const next = (currentServings ?? baseCount) - 1;
+                                        if (next >= 1) handleServingChange(itemId, recipe, next);
+                                      }}
+                                      disabled={(currentServings ?? baseCount) <= 1}
+                                      className="w-5 h-5 flex items-center justify-center rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                      <Minus className="w-3 h-3" />
+                                    </button>
+                                    <span className="text-xs font-semibold text-gray-700 min-w-[1.25rem] text-center tabular-nums">
+                                      {currentServings ?? baseCount}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const next = (currentServings ?? baseCount) + 1;
+                                        handleServingChange(itemId, recipe, next);
+                                      }}
+                                      className="w-5 h-5 flex items-center justify-center rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors"
+                                    >
+                                      <Plus className="w-3 h-3" />
+                                    </button>
                                   </div>
-                                ) : baseCount ? (
-                                  <span className="text-xs text-gray-500 mt-1 block">Servings: {baseCount}</span>
                                 ) : null}
                               </div>
                             </div>

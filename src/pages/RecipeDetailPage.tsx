@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Plus, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Plus, Minus } from 'lucide-react';
 import { type Recipe } from '../lib/supabase';
 import { parseISO8601Duration } from '../lib/utils';
 import { StarRating } from '../components/StarRating';
@@ -8,7 +8,7 @@ import { RecipeComments } from '../components/RecipeComments';
 import { currentWeekStart, getOfflineMealPlans } from '../lib/mealPlanWeeks';
 import { cacheGet, cacheSet, enqueueRating, enqueueMealPlanOp, setServingOverride, getServingOverrides } from '../lib/offlineCache';
 import { markDirty, flushWrites } from '../lib/syncManager';
-import { parseServingCount, generateServingOptions, scaleIngredient } from '../lib/servingScale';
+import { parseServingCount, scaleIngredient } from '../lib/servingScale';
 
 export function RecipeDetailPage() {
   const { id } = useParams();
@@ -28,7 +28,6 @@ export function RecipeDetailPage() {
   const [chosenServings, setChosenServings] = useState<number | null>(null);
 
   const baseServingCount = useMemo(() => recipe ? parseServingCount(recipe.servings) : null, [recipe]);
-  const servingOptions = useMemo(() => baseServingCount ? generateServingOptions(baseServingCount) : [], [baseServingCount]);
   const activeServings = chosenServings ?? baseServingCount;
   const servingMultiplier = (activeServings && baseServingCount) ? activeServings / baseServingCount : 1;
 
@@ -218,23 +217,32 @@ export function RecipeDetailPage() {
             </div>
             <div>
               <h3 className="text-xs sm:text-sm font-semibold text-gray-600 uppercase">Servings</h3>
-              {baseServingCount && servingOptions.length > 1 ? (
-                <div className="relative inline-block mt-0.5">
-                  <select
-                    value={activeServings ?? baseServingCount}
-                    onChange={(e) => {
-                      const val = Number(e.target.value);
-                      setChosenServings(val === baseServingCount ? null : val);
+              {baseServingCount ? (
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = (activeServings ?? baseServingCount) - 1;
+                      if (next >= 1) setChosenServings(next === baseServingCount ? null : next);
                     }}
-                    className="appearance-none text-base sm:text-lg font-bold text-gray-900 bg-orange-50 border border-orange-200 rounded-lg pl-3 pr-8 py-1 cursor-pointer hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-colors"
+                    disabled={(activeServings ?? baseServingCount) <= 1}
+                    className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
-                    {servingOptions.map((s) => (
-                      <option key={s} value={s}>
-                        {s}{s === baseServingCount ? ' (original)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-500 pointer-events-none" />
+                    <Minus className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="text-base sm:text-lg font-bold text-gray-900 min-w-[2rem] text-center tabular-nums">
+                    {activeServings ?? baseServingCount}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = (activeServings ?? baseServingCount) + 1;
+                      setChosenServings(next === baseServingCount ? null : next);
+                    }}
+                    className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               ) : (
                 <p className="text-base sm:text-lg font-bold text-gray-900">{recipe.servings}</p>

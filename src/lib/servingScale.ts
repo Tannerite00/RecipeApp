@@ -117,24 +117,3 @@ export function parseServingCount(servings: string): number | null {
   return null;
 }
 
-export function computeSmallestServing(baseServing: number): number {
-  let smallest = baseServing;
-  while (smallest > 1 && smallest % 2 === 0) {
-    smallest /= 2;
-  }
-  return smallest;
-}
-
-export function generateServingOptions(baseServing: number): number[] {
-  const increment = computeSmallestServing(baseServing);
-  const options: number[] = [];
-  const max = baseServing * 3;
-  for (let s = increment; s <= max; s += increment) {
-    options.push(s);
-  }
-  if (!options.includes(baseServing)) {
-    options.push(baseServing);
-    options.sort((a, b) => a - b);
-  }
-  return options;
-}
