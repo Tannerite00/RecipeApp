@@ -5,88 +5,132 @@ import { currentWeekStart, getOfflineMealPlans } from '../lib/mealPlanWeeks';
 import { cacheGet, getServingOverrides } from '../lib/offlineCache';
 import { parseServingCount, scaleIngredient } from '../lib/servingScale';
 
-interface Ingredient {
+interface GroceryItem {
   name: string;
   quantity: number;
   unit: string;
+  key: string;
 }
 
-const UNIT_CONVERSIONS: Record<string, number> = {
-  cup: 1, cups: 1,
-  tbsp: 1 / 16, tablespoon: 1 / 16, tablespoons: 1 / 16,
-  tsp: 1 / 48, teaspoon: 1 / 48, teaspoons: 1 / 48,
-  oz: 1 / 8, ounce: 1 / 8, ounces: 1 / 8,
-  slice: 1, slices: 1,
-};
-
-const FRACTION_MAP: Record<number, string> = {
-  0.25: '1/4', 0.33: '1/3', 0.5: '1/2', 0.66: '2/3', 0.75: '3/4',
-};
-
 const UNICODE_FRACTIONS: Record<string, number> = {
-  '\u00BC': 0.25, '\u00BD': 0.5, '\u00BE': 0.75,
+  '\u00BC': 1/4, '\u00BD': 1/2, '\u00BE': 3/4,
+  '\u2150': 1/7, '\u2151': 1/9, '\u2152': 1/10,
+  '\u2153': 1/3, '\u2154': 2/3, '\u2155': 1/5,
+  '\u2156': 2/5, '\u2157': 3/5, '\u2158': 4/5,
+  '\u2159': 1/6, '\u215A': 5/6, '\u215B': 1/8,
+  '\u215C': 3/8, '\u215D': 5/8, '\u215E': 7/8,
 };
 
-const parseQuantity = (qtyStr: string) => {
-  qtyStr = qtyStr.trim();
-  if (!qtyStr) return 1;
-  Object.entries(UNICODE_FRACTIONS).forEach(([char, val]) => {
-    qtyStr = qtyStr.replace(char, ` ${val}`);
-  });
-  const parts = qtyStr.split(' ').filter(Boolean);
-  let total = 0;
-  parts.forEach(p => {
-    if (p.includes('/')) {
-      const [num, denom] = p.split('/').map(Number);
-      if (!isNaN(num) && !isNaN(denom)) total += num / denom;
-    } else {
-      const n = parseFloat(p);
-      if (!isNaN(n)) total += n;
+const FRACTION_CHARS = Object.keys(UNICODE_FRACTIONS).join('');
+
+const LEADING_QTY_RE = new RegExp(
+  `^\\s*(\\d+\\s*[${FRACTION_CHARS}]|\\d+\\/\\d+|\\d+\\.\\d+|\\d+|[${FRACTION_CHARS}])\\s*(.*)$`
+);
+
+const KNOWN_UNITS: Record<string, string> = {
+  cup: 'cup', cups: 'cup',
+  tablespoon: 'tablespoon', tablespoons: 'tablespoon', tbsp: 'tablespoon',
+  teaspoon: 'teaspoon', teaspoons: 'teaspoon', tsp: 'teaspoon',
+  oz: 'oz', ounce: 'oz', ounces: 'oz',
+  lb: 'lb', lbs: 'lb', pound: 'lb', pounds: 'lb',
+  clove: 'clove', cloves: 'clove',
+  slice: 'slice', slices: 'slice',
+  can: 'can', cans: 'can',
+  bunch: 'bunch', bunches: 'bunch',
+  head: 'head', heads: 'head',
+  sprig: 'sprig', sprigs: 'sprig',
+  pinch: 'pinch',
+  dash: 'dash',
+};
+
+function parseFraction(s: string): number {
+  s = s.trim();
+  for (const [ch, val] of Object.entries(UNICODE_FRACTIONS)) {
+    if (s.includes(ch)) {
+      const before = s.replace(ch, '').trim();
+      return (before ? parseFloat(before) : 0) + val;
     }
-  });
-  return total || 1;
-};
-
-const parseIngredient = (ingredient: string) => {
-  const trimmed = ingredient.trim();
-  const match = trimmed.match(/^([\d\s\/\u00bc-\u00be\u2150-\u215e]+)?\s*([a-zA-Z]+)?\s*(.*)$/);
-  if (!match) return { quantity: 1, unit: 'count', name: trimmed };
-  let [, qtyStr, unit, name] = match;
-  const quantity = qtyStr ? parseQuantity(qtyStr) : 1;
-  if (!unit || !UNIT_CONVERSIONS[unit.toLowerCase()]) {
-    name = [unit, name].filter(Boolean).join(' ').trim();
-    unit = 'count';
   }
-  return { quantity, unit: unit ? unit.toLowerCase() : 'count', name: name.trim() };
-};
-
-const aggregateIngredientsSmart = (ingredientLists: string[][]) => {
-  const result: Record<string, { quantity: number; unit: string }> = {};
-  ingredientLists.forEach(list => {
-    list.forEach(ingredient => {
-      const { quantity, unit, name } = parseIngredient(ingredient);
-      if (!result[name]) result[name] = { quantity: 0, unit };
-      const convertedQty = quantity * (UNIT_CONVERSIONS[unit] || 1);
-      result[name].quantity += convertedQty;
-      if (unit !== 'count') result[name].unit = 'cup';
-    });
-  });
-  return result;
-};
-
-const formatIngredient = (name: string, data: any) => {
-  if (data.unit === 'count') {
-    const qty = Math.round(data.quantity * 100) / 100;
-    return `${qty} ${name}${qty > 1 ? 's' : ''}`;
+  if (s.includes('/')) {
+    const [n, d] = s.split('/');
+    return parseFloat(n) / parseFloat(d);
   }
-  const whole = Math.floor(data.quantity);
-  const fraction = data.quantity - whole;
-  const roundedFrac = Object.keys(FRACTION_MAP)
-    .map(Number)
-    .find(f => Math.abs(f - fraction) < 0.02);
-  const fractionStr = roundedFrac ? ` ${FRACTION_MAP[roundedFrac]}` : '';
-  return `${whole > 0 ? whole : ''}${fractionStr} ${data.unit} ${name}`.trim();
-};
+  return parseFloat(s);
+}
+
+function toFriendlyFraction(n: number): string {
+  if (n === 0) return '0';
+  const whole = Math.floor(n);
+  const frac = n - whole;
+  if (Math.abs(frac) < 0.01) return String(whole);
+
+  const fractions: [number, string][] = [
+    [1/8, '1/8'], [1/4, '1/4'], [1/3, '1/3'],
+    [3/8, '3/8'], [1/2, '1/2'], [5/8, '5/8'],
+    [2/3, '2/3'], [3/4, '3/4'], [7/8, '7/8'],
+  ];
+  let best = '';
+  let bestDiff = Infinity;
+  for (const [val, str] of fractions) {
+    const diff = Math.abs(frac - val);
+    if (diff < bestDiff) { bestDiff = diff; best = str; }
+  }
+  if (bestDiff < 0.04) {
+    return whole > 0 ? `${whole} ${best}` : best;
+  }
+  const rounded = Math.round(n * 100) / 100;
+  if (rounded === Math.round(rounded)) return String(Math.round(rounded));
+  return rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function parseIngredient(raw: string): { quantity: number; unit: string; name: string } {
+  const trimmed = raw.trim().replace(/<[^>]*>/g, '');
+  const qtyMatch = trimmed.match(LEADING_QTY_RE);
+  if (!qtyMatch) return { quantity: 0, unit: '', name: trimmed };
+
+  const quantity = parseFraction(qtyMatch[1].trim());
+  let rest = qtyMatch[2].trim();
+
+  const unitMatch = rest.match(/^(\S+)\s+(.*)$/);
+  if (unitMatch) {
+    const candidate = unitMatch[1].toLowerCase().replace(/\.$/, '');
+    const canonical = KNOWN_UNITS[candidate];
+    if (canonical) {
+      return { quantity: isNaN(quantity) ? 1 : quantity, unit: canonical, name: unitMatch[2].trim() };
+    }
+  }
+
+  return { quantity: isNaN(quantity) ? 1 : quantity, unit: '', name: rest };
+}
+
+function aggregateIngredients(ingredientLists: string[][]): GroceryItem[] {
+  const map = new Map<string, { quantity: number; unit: string; name: string }>();
+
+  for (const list of ingredientLists) {
+    for (const raw of list) {
+      const { quantity, unit, name } = parseIngredient(raw);
+      if (!name) continue;
+
+      const key = `${unit}||${name.toLowerCase()}`;
+      const existing = map.get(key);
+      if (existing) {
+        existing.quantity += quantity;
+      } else {
+        map.set(key, { quantity, unit, name });
+      }
+    }
+  }
+
+  return Array.from(map.entries())
+    .map(([key, data]) => ({ key, name: data.name, quantity: data.quantity, unit: data.unit }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function formatGroceryItem(item: GroceryItem): string {
+  const qtyStr = item.quantity > 0 ? toFriendlyFraction(item.quantity) : '';
+  const parts = [qtyStr, item.unit, item.name].filter(Boolean);
+  return parts.join(' ');
+}
 
 function formatWeekStart(weekStart: string): string {
   const [y, m, d] = weekStart.split('-').map(Number);
@@ -96,7 +140,7 @@ function formatWeekStart(weekStart: string): string {
 export function GroceryListPage() {
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [selectedMealPlan, setSelectedMealPlan] = useState('');
-  const [groceryItems, setGroceryItems] = useState<Ingredient[]>([]);
+  const [groceryItems, setGroceryItems] = useState<GroceryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
   const [isComplete, setIsComplete] = useState(false);
@@ -166,12 +210,7 @@ export function GroceryListPage() {
       }
     }
 
-    const aggregated = aggregateIngredientsSmart(ingredientLists);
-    const ingredientArray: Ingredient[] = Object.entries(aggregated)
-      .map(([name, data]) => ({ name, quantity: data.quantity, unit: data.unit }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-    setGroceryItems(ingredientArray);
+    setGroceryItems(aggregateIngredients(ingredientLists));
   }
 
   const handleMealPlanChange = (planId: string) => {
@@ -261,22 +300,22 @@ export function GroceryListPage() {
             </div>
 
             <div className="divide-y">
-              {groceryItems.map((item, idx) => (
+              {groceryItems.map((item) => (
                 <div
-                  key={idx}
-                  onClick={() => toggleCheckItem(item.name)}
+                  key={item.key}
+                  onClick={() => toggleCheckItem(item.key)}
                   className={`p-4 cursor-pointer flex items-center gap-3 transition ${
-                    checkedItems.has(item.name) ? 'bg-green-50' : 'hover:bg-gray-50'
+                    checkedItems.has(item.key) ? 'bg-green-50' : 'hover:bg-gray-50'
                   }`}
                 >
                   <input
                     type="checkbox"
-                    checked={checkedItems.has(item.name)}
-                    onChange={(e) => { e.stopPropagation(); toggleCheckItem(item.name); }}
+                    checked={checkedItems.has(item.key)}
+                    onChange={(e) => { e.stopPropagation(); toggleCheckItem(item.key); }}
                     className="w-5 h-5"
                   />
-                  <p className={`flex-1 font-medium ${checkedItems.has(item.name) ? 'line-through text-gray-500' : ''}`}>
-                    {formatIngredient(item.name, item)}
+                  <p className={`flex-1 font-medium ${checkedItems.has(item.key) ? 'line-through text-gray-500' : ''}`}>
+                    {formatGroceryItem(item)}
                   </p>
                 </div>
               ))}
