@@ -42,27 +42,48 @@ export interface CachedMealPlanRef {
 }
 
 export function getOfflineMealPlans(): CachedMealPlanRef[] {
-  const cached = cacheGet<CachedMealPlanRef[]>('detail-meal-plans');
-  const targetWeeks = plannableWeekStarts();
-  const cutoff = cutoffWeekStart();
+  const cached = cacheGet<CachedMealPlanRef[]>('detail-meal-plans') || [];
 
-  const plans = cached
-    ? cached.filter((p) => p.week_start_date >= cutoff)
-    : [];
+  const now = new Date();
+  const base = startOfWeekSunday(now);
 
-  const have = new Set(plans.map((p) => p.week_start_date));
-  for (const w of targetWeeks) {
-    if (!have.has(w)) {
-      plans.push({ id: `offline-${w}`, week_start_date: w });
+  // ✅ Build FULL timeline: past + current + future
+  const allWeeks: string[] = [];
+
+  for (let i = -WEEKS_RETAINED; i <= WEEKS_AHEAD; i++) {
+    const d = new Date(base);
+    d.setUTCDate(d.getUTCDate() + i * 7);
+    allWeeks.push(toDateString(d));
+  }
+
+  const validWeekSet = new Set(allWeeks);
+
+  // ✅ Normalize cached data to only valid weeks
+  const normalized: CachedMealPlanRef[] = [];
+
+  const map = new Map<string, CachedMealPlanRef>();
+
+  for (const plan of cached) {
+    // ❌ drop invalid weeks (like 4/20)
+    if (!validWeekSet.has(plan.week_start_date)) continue;
+
+    // ✅ keep only one per week
+    if (!map.has(plan.week_start_date)) {
+      map.set(plan.week_start_date, plan);
     }
   }
 
-  plans.sort((a, b) => a.week_start_date.localeCompare(b.week_start_date));
+  // ✅ Ensure ALL weeks exist
+  for (const week of allWeeks) {
+    if (!map.has(week)) {
+      map.set(week, {
+        id: `offline-${week}`,
+        week_start_date: week,
+      });
+    }
+  }
 
-  const seen = new Set<string>();
-  return plans.filter((p) => {
-    if (seen.has(p.week_start_date)) return false;
-    seen.add(p.week_start_date);
-    return true;
-  });
+  return Array.from(map.values()).sort((a, b) =>
+    a.week_start_date.localeCompare(b.week_start_date)
+  );
 }
