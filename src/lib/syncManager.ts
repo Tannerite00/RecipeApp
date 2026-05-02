@@ -304,6 +304,22 @@ async function pullComments(): Promise<void> {
   } catch {}
 }
 
+async function pullFavorites(): Promise<void> {
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return;
+
+    const { data, error } = await supabase
+      .from('recipe_favorites')
+      .select('recipe_id')
+      .eq('user_id', userData.user.id);
+    if (error) throw error;
+
+    const ids = (data || []).map((f: any) => f.recipe_id);
+    cacheSet('favorites', ids);
+  } catch {}
+}
+
 // --- Full sync cycle ---
 
 export async function runSync(): Promise<void> {
@@ -324,6 +340,7 @@ export async function runSync(): Promise<void> {
       pullMealPlans(),
       pullUserData(),
       pullComments(),
+      pullFavorites(),
     ]);
 
     clearDirty();
@@ -350,6 +367,7 @@ export async function forceSync(): Promise<void> {
       pullMealPlans(),
       pullUserData(),
       pullComments(),
+      pullFavorites(),
     ]);
 
     clearDirty();
@@ -367,6 +385,28 @@ export async function flushWrites(): Promise<void> {
     await flushMealPlanOps();
     await flushCommentOps();
     if (!isDirty()) clearDirty();
+  } catch {}
+}
+
+// --- Favorites ---
+
+export async function toggleFavoriteRemote(recipeId: string, isFavorited: boolean): Promise<void> {
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return;
+
+    if (isFavorited) {
+      await supabase.from('recipe_favorites').insert({
+        user_id: userData.user.id,
+        recipe_id: recipeId,
+      });
+    } else {
+      await supabase
+        .from('recipe_favorites')
+        .delete()
+        .eq('user_id', userData.user.id)
+        .eq('recipe_id', recipeId);
+    }
   } catch {}
 }
 

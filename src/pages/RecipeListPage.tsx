@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, X, ArrowLeft, ShieldAlert } from 'lucide-react';
+import { Search, X, ArrowLeft, SlidersHorizontal, Heart, ChevronDown } from 'lucide-react';
 import { type Recipe } from '../lib/supabase';
-import { parseISO8601Duration, formatRecipeType } from '../lib/utils';
+import { parseISO8601Duration, formatRecipeType, durationToMinutes } from '../lib/utils';
 import { StarRating } from '../components/StarRating';
-import { cacheGet, cacheSet, loadBundledRecipes } from '../lib/offlineCache';
+import { cacheGet, cacheSet, loadBundledRecipes, getFavorites, setFavorite, removeFavorite } from '../lib/offlineCache';
+import { toggleFavoriteRemote } from '../lib/syncManager';
 
 interface MealPlanPickState {
   pickRecipeForMealPlan: boolean;
@@ -40,6 +41,19 @@ const ALLERGENS = [
   { key: 'chocolate', label: 'Chocolate (cocoa)', terms: ['chocolate', 'cocoa', 'cacao'] },
 ];
 
+type SortOption = 'default' | 'alpha_asc' | 'alpha_desc' | 'prep_asc' | 'prep_desc' | 'cook_asc' | 'cook_desc' | 'rating_desc';
+
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: 'default', label: 'Default' },
+  { value: 'alpha_asc', label: 'A to Z' },
+  { value: 'alpha_desc', label: 'Z to A' },
+  { value: 'prep_asc', label: 'Prep Time (shortest)' },
+  { value: 'prep_desc', label: 'Prep Time (longest)' },
+  { value: 'cook_asc', label: 'Cook Time (shortest)' },
+  { value: 'cook_desc', label: 'Cook Time (longest)' },
+  { value: 'rating_desc', label: 'Highest Rated' },
+];
+
 function recipeContainsAllergen(recipe: Recipe, allergenTerms: string[]): boolean {
   return recipe.ingredients.some((ingredient) => {
     const lower = ingredient.toLowerCase();
@@ -48,6 +62,33 @@ function recipeContainsAllergen(recipe: Recipe, allergenTerms: string[]): boolea
       return regex.test(lower);
     });
   });
+}
+
+function FilterSection({ title, isOpen, onToggle, children }: {
+  title: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border-b border-gray-100 last:border-b-0">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-5 py-3.5 text-left hover:bg-gray-50 transition-colors"
+      >
+        <span className="text-sm font-semibold text-gray-900">{title}</span>
+        <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+      <div
+        className={`overflow-hidden transition-all duration-200 ${isOpen ? 'max-h-[50vh] opacity-100' : 'max-h-0 opacity-0'}`}
+      >
+        <div className="px-5 pb-4">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function RecipeListPage() {
@@ -61,16 +102,26 @@ export function RecipeListPage() {
   const [loading, setLoading] = useState(true);
   const [recipeTypes, setRecipeTypes] = useState<string[]>([]);
   const [ratingStats, setRatingStats] = useState<Record<string, { average: number; count: number }>>({});
-  const [showAllergenModal, setShowAllergenModal] = useState(false);
   const [selectedAllergens, setSelectedAllergens] = useState<Set<string>>(() => {
     const cached = cacheGet<string[]>('allergen-filters');
     return cached ? new Set(cached) : new Set();
   });
+  const [sortOption, setSortOption] = useState<SortOption>('default');
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [openSections, setOpenSections] = useState({ types: true, allergens: false, sort: false });
+  const [favorites, setFavoritesState] = useState<Set<string>>(getFavorites);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
 
   const pickState = (location.state as MealPlanPickState | null)?.pickRecipeForMealPlan
     ? (location.state as MealPlanPickState)
     : null;
+
+  const activeFilterCount =
+    (selectedType ? 1 : 0) +
+    selectedAllergens.size +
+    (sortOption !== 'default' ? 1 : 0);
 
   useEffect(() => {
     loadFromCache();
@@ -79,8 +130,10 @@ export function RecipeListPage() {
   async function loadFromCache() {
     const cached = cacheGet<Recipe[]>('recipes');
     const cachedStats = cacheGet<Record<string, { average: number; count: number }>>('rating-stats');
+    const cachedUser = cacheGet<{ id: string }>('auth-user');
 
     if (cachedStats) setRatingStats(cachedStats);
+    if (cachedUser?.id) setCurrentUserId(cachedUser.id);
 
     if (cached && cached.length) {
       setRecipes(cached);
@@ -105,6 +158,10 @@ export function RecipeListPage() {
 
   useEffect(() => {
     let filtered = recipes;
+
+    if (showFavoritesOnly) {
+      filtered = filtered.filter((r) => favorites.has(r.id));
+    }
 
     if (selectedAllergens.size > 0) {
       const activeTerms = ALLERGENS
@@ -137,8 +194,39 @@ export function RecipeListPage() {
       }
     }
 
+    if (sortOption !== 'default') {
+      filtered = [...filtered];
+      switch (sortOption) {
+        case 'alpha_asc':
+          filtered.sort((a, b) => a.title.localeCompare(b.title));
+          break;
+        case 'alpha_desc':
+          filtered.sort((a, b) => b.title.localeCompare(a.title));
+          break;
+        case 'prep_asc':
+          filtered.sort((a, b) => durationToMinutes(a.prep_time) - durationToMinutes(b.prep_time));
+          break;
+        case 'prep_desc':
+          filtered.sort((a, b) => durationToMinutes(b.prep_time) - durationToMinutes(a.prep_time));
+          break;
+        case 'cook_asc':
+          filtered.sort((a, b) => durationToMinutes(a.cook_time) - durationToMinutes(b.cook_time));
+          break;
+        case 'cook_desc':
+          filtered.sort((a, b) => durationToMinutes(b.cook_time) - durationToMinutes(a.cook_time));
+          break;
+        case 'rating_desc':
+          filtered.sort((a, b) => {
+            const ra = ratingStats[a.id]?.average ?? 0;
+            const rb = ratingStats[b.id]?.average ?? 0;
+            return rb - ra;
+          });
+          break;
+      }
+    }
+
     setFilteredRecipes(filtered);
-  }, [searchQuery, selectedType, searchMode, recipes, selectedAllergens]);
+  }, [searchQuery, selectedType, searchMode, recipes, selectedAllergens, sortOption, showFavoritesOnly, favorites, ratingStats]);
 
   function toggleAllergen(key: string) {
     setSelectedAllergens((prev) => {
@@ -150,21 +238,41 @@ export function RecipeListPage() {
     });
   }
 
-  function clearAllAllergens() {
+  function clearAllFilters() {
+    setSelectedType('');
     setSelectedAllergens(new Set());
+    setSortOption('default');
     cacheSet('allergen-filters', []);
   }
 
+  function toggleSection(section: keyof typeof openSections) {
+    setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  }
+
+  function handleToggleFavorite(e: React.MouseEvent, recipeId: string) {
+    e.stopPropagation();
+    const isFav = favorites.has(recipeId);
+    if (isFav) {
+      removeFavorite(recipeId);
+    } else {
+      setFavorite(recipeId);
+    }
+    setFavoritesState(getFavorites());
+    if (currentUserId) {
+      void toggleFavoriteRemote(recipeId, !isFav);
+    }
+  }
+
   useEffect(() => {
-    if (!showAllergenModal) return;
+    if (!showFilterModal) return;
     function handleClickOutside(e: MouseEvent) {
       if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
-        setShowAllergenModal(false);
+        setShowFilterModal(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showAllergenModal]);
+  }, [showFilterModal]);
 
   function handleRecipeClick(recipe: Recipe) {
     if (pickState) {
@@ -241,80 +349,40 @@ export function RecipeListPage() {
               </button>
             </div>
 
-            <div className="relative">
-              <button
-                onClick={() => setShowAllergenModal(!showAllergenModal)}
-                className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
-                  selectedAllergens.size > 0
-                    ? 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100'
-                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                <ShieldAlert className="w-4 h-4" />
-                Allergens
-                {selectedAllergens.size > 0 && (
-                  <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold bg-red-600 text-white rounded-full">
-                    {selectedAllergens.size}
-                  </span>
-                )}
-              </button>
-
-              {showAllergenModal && (
-                <>
-                  <div
-                    className="sm:hidden fixed inset-0 bg-black/40 z-40"
-                    onClick={() => setShowAllergenModal(false)}
-                  />
-                  <div
-                    ref={modalRef}
-                    className="fixed inset-x-3 top-1/2 -translate-y-1/2 z-50 sm:absolute sm:inset-auto sm:left-0 sm:top-full sm:mt-2 sm:translate-y-0 w-auto sm:w-[400px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden"
-                    style={{ animation: 'fadeSlideIn 0.15s ease-out' }}
-                  >
-                    <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <ShieldAlert className="w-4 h-4 text-red-600" />
-                        <h3 className="font-semibold text-gray-900 text-sm">Allergen Filters</h3>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {selectedAllergens.size > 0 && (
-                          <button
-                            onClick={clearAllAllergens}
-                            className="text-xs text-red-600 hover:text-red-700 font-medium"
-                          >
-                            Clear all
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setShowAllergenModal(false)}
-                          className="text-gray-400 hover:text-gray-600 transition-colors"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                    <p className="px-4 pt-3 pb-2 text-xs text-gray-500">
-                      Check allergens to hide recipes containing them.
-                    </p>
-                    <div className="px-2 pb-3 max-h-[60vh] sm:max-h-[360px] overflow-y-auto">
-                      {ALLERGENS.map((allergen) => (
-                        <label
-                          key={allergen.key}
-                          className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedAllergens.has(allergen.key)}
-                            onChange={() => toggleAllergen(allergen.key)}
-                            className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 flex-shrink-0"
-                          />
-                          <span className="text-sm text-gray-800">{allergen.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </>
+            <button
+              onClick={() => setShowFilterModal(true)}
+              className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                activeFilterCount > 0
+                  ? 'bg-orange-50 border-orange-300 text-orange-700 hover:bg-orange-100'
+                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold bg-orange-600 text-white rounded-full">
+                  {activeFilterCount}
+                </span>
               )}
-            </div>
+            </button>
+
+            <button
+              onClick={() => {
+                if (!currentUserId && !showFavoritesOnly) {
+                  navigate('/auth');
+                  return;
+                }
+                setShowFavoritesOnly(!showFavoritesOnly);
+              }}
+              className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                showFavoritesOnly
+                  ? 'bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100'
+                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <Heart className={`w-4 h-4 ${showFavoritesOnly ? 'fill-rose-500' : ''}`} />
+              Favorites
+            </button>
           </div>
 
           <div className="relative">
@@ -328,51 +396,33 @@ export function RecipeListPage() {
             />
           </div>
 
-          <div className="flex items-center gap-3 flex-wrap">
-            <label className="text-sm font-medium text-gray-700">Filter by Type:</label>
-            <select
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value)}
-              className="px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
-            >
-              <option value="">All Types</option>
-              {recipeTypes.map((type) => (
-                <option key={type} value={type}>
-                  {formatRecipeType(type)}
-                </option>
-              ))}
-            </select>
-            {selectedType && (
-              <button
-                onClick={() => setSelectedType('')}
-                className="flex items-center gap-1 px-3 py-2 text-sm text-orange-600 hover:text-orange-700 font-medium"
-              >
-                <X className="w-4 h-4" />
-                Clear
-              </button>
-            )}
-          </div>
-
-          {selectedAllergens.size > 0 && (
+          {activeFilterCount > 0 && (
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-medium text-red-600">Excluding:</span>
+              <span className="text-xs font-medium text-gray-500">Active filters:</span>
+              {selectedType && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-orange-50 border border-orange-200 text-orange-700 rounded-full text-xs font-medium">
+                  {formatRecipeType(selectedType)}
+                  <button onClick={() => setSelectedType('')} className="hover:text-orange-900"><X className="w-3 h-3" /></button>
+                </span>
+              )}
               {ALLERGENS.filter((a) => selectedAllergens.has(a.key)).map((a) => (
                 <span
                   key={a.key}
                   className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 border border-red-200 text-red-700 rounded-full text-xs font-medium"
                 >
                   {a.label.split(' (')[0]}
-                  <button
-                    onClick={() => toggleAllergen(a.key)}
-                    className="hover:text-red-900 transition-colors"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
+                  <button onClick={() => toggleAllergen(a.key)} className="hover:text-red-900"><X className="w-3 h-3" /></button>
                 </span>
               ))}
+              {sortOption !== 'default' && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-700 rounded-full text-xs font-medium">
+                  {SORT_OPTIONS.find((o) => o.value === sortOption)?.label}
+                  <button onClick={() => setSortOption('default')} className="hover:text-blue-900"><X className="w-3 h-3" /></button>
+                </span>
+              )}
               <button
-                onClick={clearAllAllergens}
-                className="text-xs text-red-600 hover:text-red-700 font-medium underline"
+                onClick={clearAllFilters}
+                className="text-xs text-gray-500 hover:text-gray-700 font-medium underline ml-1"
               >
                 Clear all
               </button>
@@ -386,21 +436,47 @@ export function RecipeListPage() {
           </div>
         ) : filteredRecipes.length === 0 ? (
           <div className="flex items-center justify-center min-h-[400px]">
-            <div className="text-gray-500">
-              {searchQuery || selectedAllergens.size > 0 ? 'No recipes found matching your filters' : 'No recipes available'}
+            <div className="text-center">
+              <p className="text-gray-500">
+                {showFavoritesOnly
+                  ? 'No favorites yet. Heart some recipes to see them here!'
+                  : searchQuery || activeFilterCount > 0
+                    ? 'No recipes found matching your filters'
+                    : 'No recipes available'}
+              </p>
+              {showFavoritesOnly && (
+                <button
+                  onClick={() => setShowFavoritesOnly(false)}
+                  className="mt-3 text-sm text-orange-600 hover:text-orange-700 font-medium"
+                >
+                  Show all recipes
+                </button>
+              )}
             </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {filteredRecipes.map((recipe) => (
-              <button
+              <div
                 key={recipe.id}
                 onClick={() => handleRecipeClick(recipe)}
-                className={`bg-white rounded-lg shadow hover:shadow-lg transition p-4 sm:p-6 text-left hover:scale-105 transform duration-200 ${
+                className={`bg-white rounded-lg shadow hover:shadow-lg transition p-4 sm:p-6 text-left hover:scale-[1.02] transform duration-200 cursor-pointer relative group ${
                   pickState ? 'ring-2 ring-transparent hover:ring-blue-400' : ''
                 }`}
               >
-                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 line-clamp-2">{recipe.title}</h3>
+                <button
+                  onClick={(e) => handleToggleFavorite(e, recipe.id)}
+                  className={`absolute top-3 right-3 sm:top-4 sm:right-4 p-1.5 rounded-full transition-all duration-200 ${
+                    favorites.has(recipe.id)
+                      ? 'text-rose-500 bg-rose-50 hover:bg-rose-100'
+                      : 'text-gray-300 bg-white/80 hover:text-rose-400 hover:bg-rose-50 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100'
+                  }`}
+                  aria-label={favorites.has(recipe.id) ? 'Remove from favorites' : 'Add to favorites'}
+                >
+                  <Heart className={`w-5 h-5 ${favorites.has(recipe.id) ? 'fill-rose-500' : ''}`} />
+                </button>
+
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 line-clamp-2 pr-8">{recipe.title}</h3>
                 <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">{formatRecipeType(recipe.type)}</p>
                 <div className="flex flex-wrap gap-3 sm:gap-4 text-xs sm:text-sm text-gray-700 items-center">
                   <div>
@@ -420,11 +496,151 @@ export function RecipeListPage() {
                     size="sm"
                   />
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         )}
       </div>
+
+      {showFilterModal && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-40"
+            onClick={() => setShowFilterModal(false)}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
+            <div
+              ref={modalRef}
+              className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-md max-h-[85vh] flex flex-col pointer-events-auto"
+              style={{ animation: 'fadeSlideIn 0.15s ease-out' }}
+            >
+              <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <SlidersHorizontal className="w-5 h-5 text-orange-600" />
+                  <h3 className="font-bold text-gray-900">Filters</h3>
+                </div>
+                <div className="flex items-center gap-3">
+                  {activeFilterCount > 0 && (
+                    <button
+                      onClick={clearAllFilters}
+                      className="text-xs text-orange-600 hover:text-orange-700 font-medium"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowFilterModal(false)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="overflow-y-auto flex-1">
+                <FilterSection
+                  title={`Recipe Type${selectedType ? ` (1)` : ''}`}
+                  isOpen={openSections.types}
+                  onToggle={() => toggleSection('types')}
+                >
+                  <div className="space-y-1">
+                    <label
+                      className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors ${
+                        !selectedType ? 'bg-orange-50 text-orange-700' : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="recipeType"
+                        checked={!selectedType}
+                        onChange={() => setSelectedType('')}
+                        className="w-4 h-4 text-orange-600 focus:ring-orange-500"
+                      />
+                      <span className="text-sm">All Types</span>
+                    </label>
+                    {recipeTypes.map((type) => (
+                      <label
+                        key={type}
+                        className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors ${
+                          selectedType === type ? 'bg-orange-50 text-orange-700' : 'hover:bg-gray-50'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="recipeType"
+                          checked={selectedType === type}
+                          onChange={() => setSelectedType(type)}
+                          className="w-4 h-4 text-orange-600 focus:ring-orange-500"
+                        />
+                        <span className="text-sm">{formatRecipeType(type)}</span>
+                      </label>
+                    ))}
+                  </div>
+                </FilterSection>
+
+                <FilterSection
+                  title={`Allergens${selectedAllergens.size > 0 ? ` (${selectedAllergens.size})` : ''}`}
+                  isOpen={openSections.allergens}
+                  onToggle={() => toggleSection('allergens')}
+                >
+                  <p className="text-xs text-gray-500 mb-2">Check allergens to hide recipes containing them.</p>
+                  <div className="space-y-0.5 max-h-[30vh] overflow-y-auto">
+                    {ALLERGENS.map((allergen) => (
+                      <label
+                        key={allergen.key}
+                        className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedAllergens.has(allergen.key)}
+                          onChange={() => toggleAllergen(allergen.key)}
+                          className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 flex-shrink-0"
+                        />
+                        <span className="text-sm text-gray-800">{allergen.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </FilterSection>
+
+                <FilterSection
+                  title={`Sort By${sortOption !== 'default' ? ` (1)` : ''}`}
+                  isOpen={openSections.sort}
+                  onToggle={() => toggleSection('sort')}
+                >
+                  <div className="space-y-1">
+                    {SORT_OPTIONS.map((option) => (
+                      <label
+                        key={option.value}
+                        className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors ${
+                          sortOption === option.value ? 'bg-orange-50 text-orange-700' : 'hover:bg-gray-50'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="sortOption"
+                          checked={sortOption === option.value}
+                          onChange={() => setSortOption(option.value)}
+                          className="w-4 h-4 text-orange-600 focus:ring-orange-500"
+                        />
+                        <span className="text-sm">{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </FilterSection>
+              </div>
+
+              <div className="px-5 py-4 border-t border-gray-200 flex-shrink-0">
+                <button
+                  onClick={() => setShowFilterModal(false)}
+                  className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-lg transition-colors text-sm"
+                >
+                  Show Results ({filteredRecipes.length})
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
-}  
+}

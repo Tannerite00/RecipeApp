@@ -19,6 +19,13 @@ export function parseISO8601Duration(duration: string): string {
   return parts.length > 0 ? parts.join(' ') : 'N/A';
 }
 
+export function durationToMinutes(duration: string): number {
+  if (!duration || duration === 'PT0D0H0M') return Infinity;
+  const h = duration.match(/(\d+)H/);
+  const m = duration.match(/(\d+)M/);
+  return (h ? parseInt(h[1]) * 60 : 0) + (m ? parseInt(m[1]) : 0) || Infinity;
+}
+
 export function getWeekDates(startDate: Date) {
   const days = [];
   const dayLabels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];

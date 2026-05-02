@@ -171,6 +171,25 @@ export function removeServingOverride(itemId: string): void {
   cacheSet('serving-overrides', overrides);
 }
 
+// --- Favorites ---
+
+export function getFavorites(): Set<string> {
+  const arr = cacheGet<string[]>('favorites');
+  return arr ? new Set(arr) : new Set();
+}
+
+export function setFavorite(recipeId: string): void {
+  const favs = getFavorites();
+  favs.add(recipeId);
+  cacheSet('favorites', Array.from(favs));
+}
+
+export function removeFavorite(recipeId: string): void {
+  const favs = getFavorites();
+  favs.delete(recipeId);
+  cacheSet('favorites', Array.from(favs));
+}
+
 // --- Bundled recipe fallback ---
 
 function seedId(title: string, url: string | undefined): string {

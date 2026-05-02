@@ -1,13 +1,13 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Plus, Minus } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, Heart } from 'lucide-react';
 import { type Recipe } from '../lib/supabase';
 import { parseISO8601Duration } from '../lib/utils';
 import { StarRating } from '../components/StarRating';
 import { RecipeComments } from '../components/RecipeComments';
 import { currentWeekStart, getOfflineMealPlans } from '../lib/mealPlanWeeks';
-import { cacheGet, cacheSet, enqueueRating, enqueueMealPlanOp, setServingOverride, getServingOverrides } from '../lib/offlineCache';
-import { markDirty, flushWrites } from '../lib/syncManager';
+import { cacheGet, cacheSet, enqueueRating, enqueueMealPlanOp, setServingOverride, getServingOverrides, getFavorites, setFavorite, removeFavorite } from '../lib/offlineCache';
+import { markDirty, flushWrites, toggleFavoriteRemote } from '../lib/syncManager';
 import { parseServingCount, scaleIngredient } from '../lib/servingScale';
 
 export function RecipeDetailPage() {
@@ -26,6 +26,7 @@ export function RecipeDetailPage() {
   const [ratingMessage, setRatingMessage] = useState<string | null>(null);
   const [addedMessage, setAddedMessage] = useState<string | null>(null);
   const [chosenServings, setChosenServings] = useState<number | null>(null);
+  const [isFavorited, setIsFavorited] = useState(false);
 
   const baseServingCount = useMemo(() => recipe ? parseServingCount(recipe.servings) : null, [recipe]);
   const activeServings = chosenServings ?? baseServingCount;
@@ -70,6 +71,9 @@ export function RecipeDetailPage() {
     const cachedUser = cacheGet<{ id: string }>('auth-user');
     setCurrentUserId(cachedUser?.id ?? null);
 
+    // Favorites
+    setIsFavorited(getFavorites().has(id));
+
     // Meal plans
     const offlinePlans = getOfflineMealPlans();
     if (offlinePlans.length) {
@@ -112,6 +116,22 @@ export function RecipeDetailPage() {
 
     setRatingMessage('Rating saved! It will sync in the background.');
     void flushWrites();
+  }
+
+  function handleToggleFavorite() {
+    if (!currentUserId) {
+      navigate('/auth');
+      return;
+    }
+    if (!id) return;
+    const nowFav = !isFavorited;
+    setIsFavorited(nowFav);
+    if (nowFav) {
+      setFavorite(id);
+    } else {
+      removeFavorite(id);
+    }
+    void toggleFavoriteRemote(id, nowFav);
   }
 
   function addToMealPlan() {
@@ -193,16 +213,28 @@ export function RecipeDetailPage() {
         <div className="bg-white rounded-lg shadow-lg p-5 sm:p-8 mb-6">
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-4 sm:mb-6 break-words">{recipe.title}</h1>
 
-          <div className="mb-6 sm:mb-8">
+          <div className="mb-6 sm:mb-8 flex items-center gap-3">
             <button
               onClick={() => setShowMealPlanModal(true)}
-              className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg font-medium transition text-sm sm:text-base w-full sm:w-auto justify-center"
+              className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg font-medium transition text-sm sm:text-base flex-1 sm:flex-none justify-center"
             >
               <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
               Add to Meal Plan
             </button>
+            <button
+              onClick={handleToggleFavorite}
+              className={`flex items-center gap-2 px-4 py-2.5 sm:py-3 rounded-lg font-medium transition text-sm sm:text-base border ${
+                isFavorited
+                  ? 'bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100'
+                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+              aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+            >
+              <Heart className={`w-4 h-4 sm:w-5 sm:h-5 ${isFavorited ? 'fill-rose-500 text-rose-500' : ''}`} />
+              <span className="hidden sm:inline">{isFavorited ? 'Favorited' : 'Favorite'}</span>
+            </button>
             {addedMessage && (
-              <p className="mt-2 text-sm text-green-600">{addedMessage}</p>
+              <p className="text-sm text-green-600">{addedMessage}</p>
             )}
           </div>
 
