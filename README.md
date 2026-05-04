@@ -45,5 +45,7 @@ If you create mealplans offline, they will show while offline and update when ba
 
 ## Coming Soon
 
-Allergen filtering for recipes, would like to create some checkboxes that automatically disallow 
-recipes based on if they have allergens in them, such as Shellfish, Peanuts, Gluten, Dairy, etc. 
+Eventually, will add picture functionality for each recipe. Currently do not have any and
+the stock photos feel disingenuous. 
+
+
