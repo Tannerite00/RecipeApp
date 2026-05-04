@@ -7,7 +7,7 @@ import { StarRating } from '../components/StarRating';
 import { Link } from 'react-router-dom';
 import { cacheGet, cacheSet, enqueueCommentOp } from '../lib/offlineCache';
 import { formatRecipeType } from '../lib/utils';
-import { markDirty, flushWrites } from '../lib/syncManager';
+import { markDirty, flushWrites, forceSync } from '../lib/syncManager';
 
 const SPECIAL_CHARS = /[`!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/;
 
@@ -50,6 +50,10 @@ export function AccountPage() {
         cacheSet('auth-user', data.user);
         setLoading(false);
         loadCachedData(data.user.id);
+
+        forceSync().then(() => {
+          loadCachedData(data.user!.id);
+        });
       } else if (!cachedUser) {
         setLoading(false);
         navigate('/auth');

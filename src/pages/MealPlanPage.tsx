@@ -4,7 +4,7 @@ import { Trash2, Plus, Minus, GripVertical } from 'lucide-react';
 import { type MealPlan, type Recipe } from '../lib/supabase';
 import { cutoffWeekStart, currentWeekStart, plannableWeekStarts } from '../lib/mealPlanWeeks';
 import { cacheGet, cacheSet, enqueueMealPlanOp, getServingOverrides, setServingOverride, removeServingOverride } from '../lib/offlineCache';
-import { markDirty, flushWrites } from '../lib/syncManager';
+import { markDirty, flushWrites, forceSync } from '../lib/syncManager';
 import { parseServingCount } from '../lib/servingScale';
 
 interface MealPlanItemEntry {
@@ -33,10 +33,16 @@ function formatWeekStart(weekStart: string): string {
   return new Date(y, m - 1, d).toLocaleDateString();
 }
 
+function isValidSunday(dateStr: string): boolean {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCDay() === 0;
+}
+
 function ensurePlansHaveCurrentWeeks(plans: MealPlanWithItems[]): MealPlanWithItems[] {
   const cutoff = cutoffWeekStart();
   const target = plannableWeekStarts();
-  const result = plans.filter((p) => p.week_start_date >= cutoff);
+  const result = plans.filter((p) => p.week_start_date >= cutoff && isValidSunday(p.week_start_date));
   const have = new Set(result.map((p) => p.week_start_date));
 
   for (const w of target) {
@@ -54,11 +60,28 @@ function ensurePlansHaveCurrentWeeks(plans: MealPlanWithItems[]): MealPlanWithIt
   result.sort((a, b) => a.week_start_date.localeCompare(b.week_start_date));
 
   const seen = new Set<string>();
-  return result.filter((p) => {
+  const unique = result.filter((p) => {
     if (seen.has(p.week_start_date)) return false;
     seen.add(p.week_start_date);
     return true;
   });
+
+  // Deduplicate entries within each day (same recipe_id on same day)
+  for (const plan of unique) {
+    if (!plan.items) continue;
+    for (const day of plan.items) {
+      const seenRecipes = new Set<string>();
+      day.entries = day.entries.filter((entry) => {
+        const recipeId = entry.recipe?.id;
+        if (!recipeId) return true;
+        if (seenRecipes.has(recipeId)) return false;
+        seenRecipes.add(recipeId);
+        return true;
+      });
+    }
+  }
+
+  return unique;
 }
 
 export function MealPlanPage() {
@@ -98,6 +121,15 @@ export function MealPlanPage() {
     cacheSet('meal-plans', cached);
     selectCurrentWeek(cached);
     setLoading(false);
+
+    forceSync().then(() => {
+      let fresh = cacheGet<MealPlanWithItems[]>('meal-plans');
+      if (fresh && fresh.length) {
+        fresh = ensurePlansHaveCurrentWeeks(fresh);
+        setMealPlans(fresh);
+        cacheSet('meal-plans', fresh);
+      }
+    });
   }, []);
 
   // Handle returning from recipe list with a recipe to add

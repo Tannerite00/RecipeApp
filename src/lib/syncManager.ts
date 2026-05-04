@@ -106,11 +106,21 @@ async function flushMealPlanOps(): Promise<void> {
             planId = created.id;
           }
         }
-        await supabase.from('meal_plan_items').insert({
-          meal_plan_id: planId,
-          recipe_id: op.recipeId,
-          day_of_week: op.dayOfWeek,
-        });
+
+        // Check for existing identical item to prevent duplicates
+        const { data: existing } = await supabase
+          .from('meal_plan_items')
+          .select('id')
+          .eq('meal_plan_id', planId)
+          .eq('recipe_id', op.recipeId)
+          .eq('day_of_week', op.dayOfWeek);
+        if (!existing || existing.length === 0) {
+          await supabase.from('meal_plan_items').insert({
+            meal_plan_id: planId,
+            recipe_id: op.recipeId,
+            day_of_week: op.dayOfWeek,
+          });
+        }
       } else {
         if (!op.itemId.startsWith('temp-')) {
           await supabase.from('meal_plan_items').delete().eq('id', op.itemId);
@@ -193,21 +203,54 @@ async function pullRatingStats(): Promise<void> {
   } catch {}
 }
 
+function isValidSunday(dateStr: string): boolean {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCDay() === 0;
+}
+
 async function pullMealPlans(): Promise<void> {
   try {
     // Ensure week rows exist
     const targetWeeks = plannableWeekStarts();
     const { data: existing } = await supabase
       .from('meal_plans')
-      .select('week_start_date');
+      .select('id, week_start_date');
     if (existing) {
       const have = new Set(existing.map((p: any) => p.week_start_date));
       const toCreate = targetWeeks.filter((w) => !have.has(w));
       if (toCreate.length) {
         await supabase.from('meal_plans').insert(toCreate.map((w) => ({ week_start_date: w })));
       }
+
+      // Clean up: delete rows older than cutoff
       const cutoff = cutoffWeekStart();
       await supabase.from('meal_plans').delete().lt('week_start_date', cutoff);
+
+      // Clean up: delete rows whose week_start_date is not a valid Sunday
+      const badIds = existing
+        .filter((p: any) => !isValidSunday(p.week_start_date))
+        .map((p: any) => p.id);
+      if (badIds.length > 0) {
+        await supabase.from('meal_plans').delete().in('id', badIds);
+      }
+
+      // Clean up: deduplicate -- keep only one plan per week_start_date
+      const byWeek = new Map<string, string[]>();
+      for (const p of existing) {
+        const ids = byWeek.get(p.week_start_date) || [];
+        ids.push(p.id);
+        byWeek.set(p.week_start_date, ids);
+      }
+      const dupIds: string[] = [];
+      for (const ids of byWeek.values()) {
+        if (ids.length > 1) {
+          dupIds.push(...ids.slice(1));
+        }
+      }
+      if (dupIds.length > 0) {
+        await supabase.from('meal_plans').delete().in('id', dupIds);
+      }
     }
 
     // Pull plans + items
@@ -220,7 +263,7 @@ async function pullMealPlans(): Promise<void> {
     const cutoff = cutoffWeekStart();
     const seenWeeks = new Set<string>();
     const uniquePlans = (plans || [])
-      .filter((p: any) => p.week_start_date >= cutoff)
+      .filter((p: any) => p.week_start_date >= cutoff && isValidSunday(p.week_start_date))
       .filter((p: any) => {
         if (seenWeeks.has(p.week_start_date)) return false;
         seenWeeks.add(p.week_start_date);
@@ -234,18 +277,37 @@ async function pullMealPlans(): Promise<void> {
       .select('id, day_of_week, meal_plan_id, recipe_id, recipes(*)')
       .in('meal_plan_id', planIds);
 
+    // Deduplicate meal_plan_items: if the same recipe appears on the same day
+    // multiple times, keep only the first and delete the rest from the DB.
+    const dupItemIds: string[] = [];
     const grouped = uniquePlans.map((plan: any) => {
       const planItems = (items || []).filter((i: any) => i.meal_plan_id === plan.id);
       const groupedDays = Array(7)
         .fill(null)
-        .map((_, day) => ({
-          day_of_week: day,
-          entries: planItems
-            .filter((i: any) => i.day_of_week === day)
-            .map((i: any) => ({ itemId: i.id, recipe: i.recipes })),
-        }));
+        .map((_, day) => {
+          const dayItems = planItems.filter((i: any) => i.day_of_week === day);
+          const seen = new Set<string>();
+          const deduped: any[] = [];
+          for (const item of dayItems) {
+            const key = item.recipe_id;
+            if (seen.has(key)) {
+              dupItemIds.push(item.id);
+            } else {
+              seen.add(key);
+              deduped.push(item);
+            }
+          }
+          return {
+            day_of_week: day,
+            entries: deduped.map((i: any) => ({ itemId: i.id, recipe: i.recipes })),
+          };
+        });
       return { ...plan, items: groupedDays };
     });
+
+    if (dupItemIds.length > 0) {
+      await supabase.from('meal_plan_items').delete().in('id', dupItemIds);
+    }
 
     cacheSet('meal-plans', grouped);
     cacheSet(
