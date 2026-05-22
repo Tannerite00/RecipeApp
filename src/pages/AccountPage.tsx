@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Mail, Lock, LogOut, Calendar, Check, X, MessageCircle, Trash2 } from 'lucide-react';
+import { ArrowLeft, Mail, Lock, LogOut, Calendar, Check, X, MessageCircle, Trash2, Bug, Send, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import { StarRating } from '../components/StarRating';
@@ -8,6 +8,8 @@ import { Link } from 'react-router-dom';
 import { cacheGet, cacheSet, enqueueCommentOp } from '../lib/offlineCache';
 import { formatRecipeType } from '../lib/utils';
 import { markDirty, flushWrites, forceSync } from '../lib/syncManager';
+
+const SUPPORT_EMAIL = 'tanner.dodd@gmail.com';
 
 const SPECIAL_CHARS = /[`!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/;
 
@@ -17,6 +19,172 @@ const PASSWORD_RULES: { key: string; label: string; test: (v: string) => boolean
   { key: 'number', label: 'At least 1 number', test: (v) => /[0-9]/.test(v) },
   { key: 'special', label: 'At least 1 special character', test: (v) => SPECIAL_CHARS.test(v) },
 ];
+
+// ---------------------------------------------------------------------------
+// Bug Report Modal
+// ---------------------------------------------------------------------------
+
+interface BugReportModalProps {
+  user: User;
+  onClose: () => void;
+}
+
+function BugReportModal({ user, onClose }: BugReportModalProps) {
+  const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const MIN_LENGTH = 20;
+
+  function handleOverlayClick(e: React.MouseEvent) {
+    if (e.target === overlayRef.current) onClose();
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (message.trim().length < MIN_LENGTH) return;
+    setSubmitting(true);
+
+    try {
+      // Store in Supabase (best-effort, no hard failure if DB unavailable)
+      await supabase.from('bug_reports').insert({
+        user_id: user.id,
+        user_email: user.email ?? '',
+        message: message.trim(),
+      }).then(() => {});
+    } catch {}
+
+    // Open pre-filled mailto so the report also reaches email
+    const subject = encodeURIComponent('RecipeHub Bug Report');
+    const body = encodeURIComponent(
+      `From: ${user.email ?? 'unknown'}\n\n${message.trim()}`
+    );
+    window.open(`mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`, '_blank');
+
+    setSubmitting(false);
+    setSubmitted(true);
+  }
+
+  if (submitted) {
+    return (
+      <div
+        ref={overlayRef}
+        onClick={handleOverlayClick}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      >
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center animate-fade-in">
+          <div className="flex justify-center mb-4">
+            <div className="bg-green-100 rounded-full p-4">
+              <CheckCircle2 className="w-10 h-10 text-green-600" />
+            </div>
+          </div>
+          <h3 className="text-xl font-bold text-gray-900 mb-2">Report Submitted</h3>
+          <p className="text-sm text-gray-600 mb-6">
+            Thank you for the feedback! Your bug report has been sent to our support team. We'll look into it as soon as possible.
+          </p>
+          <button
+            onClick={onClose}
+            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-3 rounded-xl transition text-sm"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const trimmed = message.trim();
+  const charCount = trimmed.length;
+  const isReady = charCount >= MIN_LENGTH;
+
+  return (
+    <div
+      ref={overlayRef}
+      onClick={handleOverlayClick}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg animate-fade-in">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="bg-orange-100 rounded-lg p-2">
+              <Bug className="w-5 h-5 text-orange-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">Report a Bug</h3>
+              <p className="text-xs text-gray-500">Help us improve RecipeHub</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Describe the issue
+            </label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Please describe the bug you encountered — what happened, what you expected to happen, and the steps to reproduce it..."
+              rows={8}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition"
+              autoFocus
+            />
+            <div className="flex items-center justify-between mt-1.5">
+              <p className={`text-xs transition-colors ${isReady ? 'text-green-600' : 'text-gray-400'}`}>
+                {isReady ? 'Ready to submit' : `${MIN_LENGTH - charCount} more characters needed`}
+              </p>
+              <p className="text-xs text-gray-400">{charCount} characters</p>
+            </div>
+          </div>
+
+          <div className="bg-orange-50 border border-orange-100 rounded-xl px-4 py-3">
+            <p className="text-xs text-orange-700">
+              Your report will be sent to our support team at{' '}
+              <span className="font-medium">{SUPPORT_EMAIL}</span>. Your email address will be included so we can follow up if needed.
+            </p>
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!isReady || submitting}
+              className="flex-1 flex items-center justify-center gap-2 py-3 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-xl transition text-sm"
+            >
+              {submitting ? (
+                <span>Sending...</span>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  Send Report
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Account Page
+// ---------------------------------------------------------------------------
 
 export function AccountPage() {
   const navigate = useNavigate();
@@ -29,6 +197,7 @@ export function AccountPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [signInToast, setSignInToast] = useState(false);
+  const [showBugReport, setShowBugReport] = useState(false);
   const [userRatings, setUserRatings] = useState<
     { id: string; rating: number; updated_at: string; recipe: { id: string; title: string; type: string | null } | null }[]
   >([]);
@@ -157,6 +326,10 @@ export function AccountPage() {
         </div>
       )}
 
+      {showBugReport && user && (
+        <BugReportModal user={user} onClose={() => setShowBugReport(false)} />
+      )}
+
       <div className="w-full max-w-2xl mx-auto">
         <button
           onClick={() => navigate('/')}
@@ -171,6 +344,7 @@ export function AccountPage() {
           <p className="text-sm sm:text-base text-gray-600 mt-2">Manage your profile and credentials</p>
         </div>
 
+        {/* Profile */}
         <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 mb-6">
           <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Profile</h2>
           <div className="space-y-4">
@@ -195,6 +369,7 @@ export function AccountPage() {
           </div>
         </div>
 
+        {/* Ratings */}
         <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 mb-6">
           <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">Your Ratings</h2>
           <p className="text-sm text-gray-600 mb-4">Recipes you've rated ({userRatings.length})</p>
@@ -223,6 +398,7 @@ export function AccountPage() {
           )}
         </div>
 
+        {/* Comments */}
         <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 mb-6">
           <div className="flex items-center gap-2 mb-1">
             <MessageCircle className="w-5 h-5 text-orange-600" />
@@ -261,6 +437,7 @@ export function AccountPage() {
           )}
         </div>
 
+        {/* Change Password */}
         <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 mb-6">
           <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Change Password</h2>
           <form onSubmit={handleChangePassword} className="space-y-4" noValidate>
@@ -293,7 +470,8 @@ export function AccountPage() {
           </form>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8">
+        {/* Sign Out */}
+        <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 mb-6">
           <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">Sign Out</h2>
           <p className="text-sm text-gray-600 mb-4">Sign out of your account on this device.</p>
           <button onClick={handleLogout} className="flex items-center justify-center gap-2 w-full sm:w-auto bg-white border border-red-300 text-red-600 hover:bg-red-50 font-medium px-6 py-2.5 sm:py-3 rounded-lg transition text-sm sm:text-base">
@@ -301,6 +479,29 @@ export function AccountPage() {
             Log Out
           </button>
         </div>
+
+        {/* Report a Bug */}
+        <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8">
+          <div className="flex items-start gap-3">
+            <div className="bg-gray-100 rounded-lg p-2 flex-shrink-0 mt-0.5">
+              <Bug className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">Report a Bug</h2>
+              <p className="text-sm text-gray-600 mb-4">
+                Found something broken or not working as expected? Let us know and we'll get it fixed.
+              </p>
+              <button
+                onClick={() => setShowBugReport(true)}
+                className="flex items-center gap-2 bg-gray-900 hover:bg-gray-800 text-white font-medium px-5 py-2.5 rounded-lg transition text-sm"
+              >
+                <Bug className="w-4 h-4" />
+                Report a Bug
+              </button>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );
