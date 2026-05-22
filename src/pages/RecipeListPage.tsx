@@ -589,7 +589,7 @@ export function RecipeListPage() {
                 </FilterSection>
 
                 <FilterSection
-                  title={`Allergens${selectedAllergens.size > 0 ? ` (${selectedAllergens.size})` : ''}`}
+                  title={`Dietary Restrictions${selectedAllergens.size > 0 ? ` (${selectedAllergens.size})` : ''}`}
                   isOpen={openSections.allergens}
                   onToggle={() => toggleSection('allergens')}
                 >
