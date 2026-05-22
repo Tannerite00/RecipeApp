@@ -42,7 +42,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const resendKey = Deno.env.get('RESEND_API_KEY');
+    const resendKey = Deno.env.get('Resend_API_Key');
     if (!resendKey) {
       return new Response(JSON.stringify({ error: 'Email service not configured' }), {
         status: 500,
