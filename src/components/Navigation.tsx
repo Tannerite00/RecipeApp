@@ -38,7 +38,7 @@ export function Navigation() {
               onClick={() => navigate('/')}
               className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-base font-medium transition ${
                 isActive('/')
-                  ? 'bg-orange-100 text-orange-700'
+                  ? 'bg-teal-100 text-teal-700'
                   : 'text-gray-700 hover:bg-gray-100'
               }`}
             >
@@ -48,7 +48,7 @@ export function Navigation() {
               onClick={() => navigate('/meal-plans')}
               className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-base font-medium transition ${
                 isActive('/meal-plans')
-                  ? 'bg-orange-100 text-orange-700'
+                  ? 'bg-teal-100 text-teal-700'
                   : 'text-gray-700 hover:bg-gray-100'
               }`}
             >
@@ -59,7 +59,7 @@ export function Navigation() {
               onClick={() => navigate('/grocery-list')}
               className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-base font-medium transition ${
                 isActive('/grocery-list')
-                  ? 'bg-orange-100 text-orange-700'
+                  ? 'bg-teal-100 text-teal-700'
                   : 'text-gray-700 hover:bg-gray-100'
               }`}
             >
@@ -71,8 +71,8 @@ export function Navigation() {
                 onClick={() => navigate('/account')}
                 className={`ml-1 sm:ml-2 flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-base font-medium transition ${
                   isActive('/account')
-                    ? 'bg-orange-700 text-white'
-                    : 'bg-orange-600 text-white hover:bg-orange-700'
+                    ? 'bg-teal-700 text-white'
+                    : 'bg-teal-600 text-white hover:bg-teal-700'
                 }`}
               >
                 <UserCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -83,8 +83,8 @@ export function Navigation() {
                 onClick={() => navigate('/auth')}
                 className={`ml-1 sm:ml-2 flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-base font-medium transition ${
                   isActive('/auth')
-                    ? 'bg-orange-700 text-white'
-                    : 'bg-orange-600 text-white hover:bg-orange-700'
+                    ? 'bg-teal-700 text-white'
+                    : 'bg-teal-600 text-white hover:bg-teal-700'
                 }`}
               >
                 <LogIn className="w-3.5 h-3.5 sm:w-4 sm:h-4" />

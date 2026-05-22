@@ -98,7 +98,7 @@ export function RecipeComments({ recipeId }: Props) {
   return (
     <div className="bg-white rounded-lg shadow-lg p-5 sm:p-8">
       <div className="flex items-center gap-2 mb-4 sm:mb-6">
-        <MessageCircle className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600" />
+        <MessageCircle className="w-5 h-5 sm:w-6 sm:h-6 text-teal-600" />
         <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
           Comments{' '}
           <span className="text-gray-400 font-normal text-base sm:text-lg">
@@ -115,14 +115,14 @@ export function RecipeComments({ recipeId }: Props) {
             placeholder="Share your thoughts on this recipe..."
             rows={3}
             maxLength={1000}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm sm:text-base resize-y"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm sm:text-base resize-y"
           />
           <div className="flex items-center justify-between mt-2">
             <span className="text-xs text-gray-400">{draft.length}/1000</span>
             <button
               type="submit"
               disabled={submitting || draft.trim().length === 0}
-              className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium px-4 py-2 rounded-lg transition text-sm"
+              className="inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium px-4 py-2 rounded-lg transition text-sm"
             >
               <Send className="w-4 h-4" />
               {submitting ? 'Posting...' : 'Post Comment'}
@@ -131,11 +131,11 @@ export function RecipeComments({ recipeId }: Props) {
           {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
         </form>
       ) : (
-        <div className="mb-6 p-4 bg-orange-50 border border-orange-100 rounded-lg text-sm text-gray-700">
+        <div className="mb-6 p-4 bg-teal-50 border border-teal-100 rounded-lg text-sm text-gray-700">
           <button
             type="button"
             onClick={() => navigate('/auth')}
-            className="text-orange-600 hover:text-orange-700 font-semibold"
+            className="text-teal-600 hover:text-teal-700 font-semibold"
           >
             Sign in
           </button>{' '}
@@ -159,7 +159,7 @@ export function RecipeComments({ recipeId }: Props) {
               >
                 <div className="flex items-start justify-between gap-3 mb-1.5">
                   <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-sm flex-shrink-0">
                       {username.charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0">

@@ -304,7 +304,7 @@ export function MealPlanPage() {
   const selectedPlan = mealPlans.find(p => p.id === selectedPlanId);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 py-6 sm:py-8">
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 to-cyan-50 py-6 sm:py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
 
         <div className="mb-6 sm:mb-8">
@@ -344,7 +344,7 @@ export function MealPlanPage() {
             {selectedPlan && (
               <div className="bg-white rounded-lg shadow overflow-hidden">
 
-                <div className="bg-blue-600 px-6 py-4">
+                <div className="bg-teal-600 px-6 py-4">
                   <h2 className="text-white font-bold text-xl">
                     Week of {formatWeekStart(selectedPlan.week_start_date)}
                   </h2>
@@ -355,7 +355,7 @@ export function MealPlanPage() {
                     <div
                       key={idx}
                       className={`p-4 sm:p-6 transition-colors ${
-                        dragOverDay === idx ? 'bg-blue-50 ring-2 ring-inset ring-blue-300' : ''
+                        dragOverDay === idx ? 'bg-teal-50 ring-2 ring-inset ring-teal-300' : ''
                       }`}
                       onDragOver={(e) => handleDragOver(e, idx)}
                       onDragLeave={handleDragLeave}
@@ -374,14 +374,14 @@ export function MealPlanPage() {
                             draggable
                             onDragStart={(e) => handleDragStart(e, itemId, idx)}
                             onDragEnd={handleDragEnd}
-                            className="flex items-center justify-between bg-blue-50 p-3 mb-2 rounded cursor-grab active:cursor-grabbing group"
+                            className="flex items-center justify-between bg-teal-50 p-3 mb-2 rounded cursor-grab active:cursor-grabbing group"
                           >
                             <div className="flex items-center gap-2 min-w-0 flex-1">
                               <GripVertical className="w-4 h-4 text-gray-400 flex-shrink-0 opacity-50 group-hover:opacity-100 transition-opacity" />
                               <div className="min-w-0 flex-1">
                                 <button
                                   onClick={() => navigate(`/recipe/${recipe.id}`, { state: { fromMealPlan: true, mealPlanItemId: itemId } })}
-                                  className="text-blue-600 text-sm truncate block max-w-full text-left"
+                                  className="text-teal-600 text-sm truncate block max-w-full text-left"
                                 >
                                   {recipe.title}
                                 </button>
@@ -443,7 +443,7 @@ export function MealPlanPage() {
                             },
                           })
                         }
-                        className="text-sm text-blue-600 flex items-center gap-1 mt-2 hover:text-blue-700 transition-colors"
+                        className="text-sm text-teal-600 flex items-center gap-1 mt-2 hover:text-teal-700 transition-colors"
                       >
                         <Plus className="w-4 h-4" />
                         Add Recipe

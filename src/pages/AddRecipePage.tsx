@@ -106,11 +106,11 @@ export function AddRecipePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50 py-6 sm:py-8">
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 to-cyan-50 py-6 sm:py-8">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <button
           onClick={() => navigate('/')}
-          className="flex items-center gap-2 text-orange-600 hover:text-orange-700 mb-4 sm:mb-6 font-medium text-sm sm:text-base"
+          className="flex items-center gap-2 text-teal-600 hover:text-teal-700 mb-4 sm:mb-6 font-medium text-sm sm:text-base"
         >
           <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           Back to Recipes
@@ -128,7 +128,7 @@ export function AddRecipePage() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Grandma's Chicken Soup"
-              className="w-full text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 placeholder-gray-300 border-b-2 border-gray-200 focus:border-orange-400 focus:outline-none pb-1 bg-transparent"
+              className="w-full text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 placeholder-gray-300 border-b-2 border-gray-200 focus:border-teal-400 focus:outline-none pb-1 bg-transparent"
             />
           </div>
 
@@ -137,7 +137,7 @@ export function AddRecipePage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg font-medium transition text-sm sm:text-base"
+              className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg font-medium transition text-sm sm:text-base"
             >
               <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
               {saving ? 'Saving...' : 'Save Recipe'}
@@ -156,7 +156,7 @@ export function AddRecipePage() {
                 value={prepTime}
                 onChange={(e) => setPrepTime(e.target.value)}
                 placeholder="e.g. 15 min"
-                className="w-full text-base sm:text-lg font-bold text-gray-900 placeholder-gray-300 border-b-2 border-gray-200 focus:border-orange-400 focus:outline-none pb-0.5 bg-transparent"
+                className="w-full text-base sm:text-lg font-bold text-gray-900 placeholder-gray-300 border-b-2 border-gray-200 focus:border-teal-400 focus:outline-none pb-0.5 bg-transparent"
               />
             </div>
             <div>
@@ -168,7 +168,7 @@ export function AddRecipePage() {
                 value={cookTime}
                 onChange={(e) => setCookTime(e.target.value)}
                 placeholder="e.g. 30 min"
-                className="w-full text-base sm:text-lg font-bold text-gray-900 placeholder-gray-300 border-b-2 border-gray-200 focus:border-orange-400 focus:outline-none pb-0.5 bg-transparent"
+                className="w-full text-base sm:text-lg font-bold text-gray-900 placeholder-gray-300 border-b-2 border-gray-200 focus:border-teal-400 focus:outline-none pb-0.5 bg-transparent"
               />
             </div>
             <div>
@@ -180,7 +180,7 @@ export function AddRecipePage() {
                 value={servings}
                 onChange={(e) => setServings(e.target.value)}
                 placeholder="e.g. 4"
-                className="w-full text-base sm:text-lg font-bold text-gray-900 placeholder-gray-300 border-b-2 border-gray-200 focus:border-orange-400 focus:outline-none pb-0.5 bg-transparent"
+                className="w-full text-base sm:text-lg font-bold text-gray-900 placeholder-gray-300 border-b-2 border-gray-200 focus:border-teal-400 focus:outline-none pb-0.5 bg-transparent"
               />
             </div>
             <div>
@@ -190,7 +190,7 @@ export function AddRecipePage() {
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value)}
-                className="w-full text-base sm:text-lg font-bold text-gray-900 border-b-2 border-gray-200 focus:border-orange-400 focus:outline-none pb-0.5 bg-transparent appearance-none cursor-pointer"
+                className="w-full text-base sm:text-lg font-bold text-gray-900 border-b-2 border-gray-200 focus:border-teal-400 focus:outline-none pb-0.5 bg-transparent appearance-none cursor-pointer"
               >
                 <option value="">— Select —</option>
                 {recipeTypes.map((t) => (
@@ -206,13 +206,13 @@ export function AddRecipePage() {
             <ul className="space-y-2">
               {ingredients.map((ingredient, idx) => (
                 <li key={idx} className="flex items-start gap-3">
-                  <span className="text-orange-600 font-bold mt-2.5">&#8226;</span>
+                  <span className="text-teal-600 font-bold mt-2.5">&#8226;</span>
                   <input
                     type="text"
                     value={ingredient}
                     onChange={(e) => updateIngredient(idx, e.target.value)}
                     placeholder={`Ingredient ${idx + 1}`}
-                    className="flex-1 text-gray-700 placeholder-gray-300 border-b border-gray-200 focus:border-orange-400 focus:outline-none py-1 bg-transparent"
+                    className="flex-1 text-gray-700 placeholder-gray-300 border-b border-gray-200 focus:border-teal-400 focus:outline-none py-1 bg-transparent"
                   />
                   {ingredients.length > 1 && (
                     <button
@@ -230,7 +230,7 @@ export function AddRecipePage() {
             <button
               type="button"
               onClick={addIngredient}
-              className="mt-3 flex items-center gap-1.5 text-sm text-orange-600 hover:text-orange-700 font-medium"
+              className="mt-3 flex items-center gap-1.5 text-sm text-teal-600 hover:text-teal-700 font-medium"
             >
               <Plus className="w-4 h-4" />
               Add ingredient
@@ -243,7 +243,7 @@ export function AddRecipePage() {
             <ol className="space-y-3 sm:space-y-4">
               {instructions.map((instruction, idx) => (
                 <li key={idx} className="flex gap-3 sm:gap-4">
-                  <span className="flex-shrink-0 flex items-center justify-center h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-orange-100 text-orange-600 font-bold text-sm sm:text-base mt-1">
+                  <span className="flex-shrink-0 flex items-center justify-center h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-teal-100 text-teal-600 font-bold text-sm sm:text-base mt-1">
                     {idx + 1}
                   </span>
                   <div className="flex-1 flex items-start gap-2">
@@ -252,7 +252,7 @@ export function AddRecipePage() {
                       onChange={(e) => updateInstruction(idx, e.target.value)}
                       placeholder={`Step ${idx + 1}`}
                       rows={2}
-                      className="flex-1 text-sm sm:text-base text-gray-700 placeholder-gray-300 border-b border-gray-200 focus:border-orange-400 focus:outline-none py-1 bg-transparent resize-none"
+                      className="flex-1 text-sm sm:text-base text-gray-700 placeholder-gray-300 border-b border-gray-200 focus:border-teal-400 focus:outline-none py-1 bg-transparent resize-none"
                     />
                     {instructions.length > 1 && (
                       <button
@@ -271,7 +271,7 @@ export function AddRecipePage() {
             <button
               type="button"
               onClick={addInstruction}
-              className="mt-3 flex items-center gap-1.5 text-sm text-orange-600 hover:text-orange-700 font-medium ml-10 sm:ml-11"
+              className="mt-3 flex items-center gap-1.5 text-sm text-teal-600 hover:text-teal-700 font-medium ml-10 sm:ml-11"
             >
               <Plus className="w-4 h-4" />
               Add step

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChefHat, Mail, Lock, ArrowLeft, Check, X, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, ArrowLeft, Check, X, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 type Mode = 'login' | 'signup';
@@ -93,11 +93,11 @@ export function AuthPage() {
   const showEmailError = email.length > 0 && !isEmailValid;
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] sm:min-h-[calc(100vh-4rem)] bg-gradient-to-br from-orange-50 to-amber-50 py-8 sm:py-12 px-4 sm:px-6 lg:px-8 flex flex-col items-center">
+    <div className="min-h-[calc(100vh-3.5rem)] sm:min-h-[calc(100vh-4rem)] bg-gradient-to-br from-teal-50 to-cyan-50 py-8 sm:py-12 px-4 sm:px-6 lg:px-8 flex flex-col items-center">
       <div className="w-full max-w-md">
         <button
           onClick={() => navigate('/')}
-          className="flex items-center gap-2 text-orange-600 hover:text-orange-700 mb-4 sm:mb-6 font-medium text-sm sm:text-base"
+          className="flex items-center gap-2 text-teal-600 hover:text-teal-700 mb-4 sm:mb-6 font-medium text-sm sm:text-base"
         >
           <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           Back to Recipes
@@ -105,8 +105,10 @@ export function AuthPage() {
 
         <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8">
           <div className="flex flex-col items-center mb-6 sm:mb-8">
-            <div className="bg-orange-100 rounded-full p-3 mb-3">
-              <ChefHat className="w-7 h-7 sm:w-8 sm:h-8 text-orange-600" />
+            <div className="bg-teal-100 rounded-full p-3 mb-3">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#2dd4bf' }}>
+                <span className="text-white font-bold italic text-base sm:text-lg leading-none select-none">B</span>
+              </div>
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
               {mode === 'login' ? 'Welcome back' : 'Create an account'}
@@ -118,13 +120,13 @@ export function AuthPage() {
             </p>
           </div>
 
-          <div className="flex gap-2 bg-orange-50 p-1 rounded-lg mb-6">
+          <div className="flex gap-2 bg-teal-50 p-1 rounded-lg mb-6">
             <button
               type="button"
               onClick={() => switchMode('login')}
               className={`flex-1 py-2 rounded-md text-sm font-medium transition ${
                 mode === 'login'
-                  ? 'bg-white text-orange-700 shadow-sm'
+                  ? 'bg-white text-teal-700 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -135,7 +137,7 @@ export function AuthPage() {
               onClick={() => switchMode('signup')}
               className={`flex-1 py-2 rounded-md text-sm font-medium transition ${
                 mode === 'signup'
-                  ? 'bg-white text-orange-700 shadow-sm'
+                  ? 'bg-white text-teal-700 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -161,7 +163,7 @@ export function AuthPage() {
                   className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent text-sm sm:text-base ${
                     showEmailError
                       ? 'border-red-300 focus:ring-red-500'
-                      : 'border-gray-300 focus:ring-orange-500'
+                      : 'border-gray-300 focus:ring-teal-500'
                   }`}
                 />
               </div>
@@ -184,7 +186,7 @@ export function AuthPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={mode === 'signup' ? 'Create a strong password' : 'Your password'}
-                  className="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm sm:text-base"
+                  className="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm sm:text-base"
                 />
                 <button
                   type="button"
@@ -238,7 +240,7 @@ export function AuthPage() {
                     className={`w-full pl-10 pr-10 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent text-sm sm:text-base ${
                       confirmPassword.length > 0 && !isPasswordMatch
                         ? 'border-red-300 focus:ring-red-500'
-                        : 'border-gray-300 focus:ring-orange-500'
+                        : 'border-gray-300 focus:ring-teal-500'
                     }`}
                   />
                   <button
@@ -271,7 +273,7 @@ export function AuthPage() {
             <button
               type="submit"
               disabled={loading || !canSubmit}
-              className="w-full bg-orange-600 hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-2.5 sm:py-3 rounded-lg transition text-sm sm:text-base"
+              className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-2.5 sm:py-3 rounded-lg transition text-sm sm:text-base"
             >
               {loading
                 ? 'Please wait...'
@@ -286,7 +288,7 @@ export function AuthPage() {
             <button
               type="button"
               onClick={() => switchMode(mode === 'login' ? 'signup' : 'login')}
-              className="text-orange-600 hover:text-orange-700 font-medium"
+              className="text-teal-600 hover:text-teal-700 font-medium"
             >
               {mode === 'login' ? 'Sign up' : 'Log in'}
             </button>

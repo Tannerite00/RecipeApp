@@ -296,7 +296,7 @@ export function RecipeListPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50">
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 to-cyan-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
 
         {pickState && (
@@ -326,7 +326,7 @@ export function RecipeListPage() {
           </div>
           <button
             onClick={() => navigate('/add-recipe')}
-            className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-lg font-medium transition text-sm sm:text-base flex-shrink-0 shadow-sm"
+            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-lg font-medium transition text-sm sm:text-base flex-shrink-0 shadow-sm"
           >
             <PlusCircle className="w-4 h-4 sm:w-5 sm:h-5" />
             <span className="hidden sm:inline">Add Recipe</span>
@@ -341,7 +341,7 @@ export function RecipeListPage() {
                 onClick={() => setSearchMode('name')}
                 className={`px-4 py-2 text-sm font-medium transition-colors ${
                   searchMode === 'name'
-                    ? 'bg-orange-500 text-white'
+                    ? 'bg-teal-500 text-white'
                     : 'text-gray-700 hover:bg-gray-50'
                 }`}
               >
@@ -351,7 +351,7 @@ export function RecipeListPage() {
                 onClick={() => setSearchMode('ingredients')}
                 className={`px-4 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
                   searchMode === 'ingredients'
-                    ? 'bg-orange-500 text-white'
+                    ? 'bg-teal-500 text-white'
                     : 'text-gray-700 hover:bg-gray-50'
                 }`}
               >
@@ -363,14 +363,14 @@ export function RecipeListPage() {
               onClick={() => setShowFilterModal(true)}
               className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
                 activeFilterCount > 0
-                  ? 'bg-orange-50 border-orange-300 text-orange-700 hover:bg-orange-100'
+                  ? 'bg-teal-50 border-teal-300 text-teal-700 hover:bg-teal-100'
                   : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
               }`}
             >
               <SlidersHorizontal className="w-4 h-4" />
               Filters
               {activeFilterCount > 0 && (
-                <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold bg-orange-600 text-white rounded-full">
+                <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold bg-teal-600 text-white rounded-full">
                   {activeFilterCount}
                 </span>
               )}
@@ -402,7 +402,7 @@ export function RecipeListPage() {
               placeholder={searchMode === 'name' ? 'Search recipes by name...' : 'Search by ingredient... (comma separate for multiple ingredients)'}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              className="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
             />
           </div>
 
@@ -410,9 +410,9 @@ export function RecipeListPage() {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-medium text-gray-500">Active filters:</span>
               {selectedType && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-orange-50 border border-orange-200 text-orange-700 rounded-full text-xs font-medium">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-teal-50 border border-teal-200 text-teal-700 rounded-full text-xs font-medium">
                   {formatRecipeType(selectedType)}
-                  <button onClick={() => setSelectedType('')} className="hover:text-orange-900"><X className="w-3 h-3" /></button>
+                  <button onClick={() => setSelectedType('')} className="hover:text-teal-900"><X className="w-3 h-3" /></button>
                 </span>
               )}
               {ALLERGENS.filter((a) => selectedAllergens.has(a.key)).map((a) => (
@@ -457,7 +457,7 @@ export function RecipeListPage() {
               {showFavoritesOnly && (
                 <button
                   onClick={() => setShowFavoritesOnly(false)}
-                  className="mt-3 text-sm text-orange-600 hover:text-orange-700 font-medium"
+                  className="mt-3 text-sm text-teal-600 hover:text-teal-700 font-medium"
                 >
                   Show all recipes
                 </button>
@@ -526,14 +526,14 @@ export function RecipeListPage() {
             >
               <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-2.5">
-                  <SlidersHorizontal className="w-5 h-5 text-orange-600" />
+                  <SlidersHorizontal className="w-5 h-5 text-teal-600" />
                   <h3 className="font-bold text-gray-900">Filters</h3>
                 </div>
                 <div className="flex items-center gap-3">
                   {activeFilterCount > 0 && (
                     <button
                       onClick={clearAllFilters}
-                      className="text-xs text-orange-600 hover:text-orange-700 font-medium"
+                      className="text-xs text-teal-600 hover:text-teal-700 font-medium"
                     >
                       Clear all
                     </button>
@@ -556,7 +556,7 @@ export function RecipeListPage() {
                   <div className="space-y-1">
                     <label
                       className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors ${
-                        !selectedType ? 'bg-orange-50 text-orange-700' : 'hover:bg-gray-50'
+                        !selectedType ? 'bg-teal-50 text-teal-700' : 'hover:bg-gray-50'
                       }`}
                     >
                       <input
@@ -564,7 +564,7 @@ export function RecipeListPage() {
                         name="recipeType"
                         checked={!selectedType}
                         onChange={() => setSelectedType('')}
-                        className="w-4 h-4 text-orange-600 focus:ring-orange-500"
+                        className="w-4 h-4 text-teal-600 focus:ring-teal-500"
                       />
                       <span className="text-sm">All Types</span>
                     </label>
@@ -572,7 +572,7 @@ export function RecipeListPage() {
                       <label
                         key={type}
                         className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors ${
-                          selectedType === type ? 'bg-orange-50 text-orange-700' : 'hover:bg-gray-50'
+                          selectedType === type ? 'bg-teal-50 text-teal-700' : 'hover:bg-gray-50'
                         }`}
                       >
                         <input
@@ -580,7 +580,7 @@ export function RecipeListPage() {
                           name="recipeType"
                           checked={selectedType === type}
                           onChange={() => setSelectedType(type)}
-                          className="w-4 h-4 text-orange-600 focus:ring-orange-500"
+                          className="w-4 h-4 text-teal-600 focus:ring-teal-500"
                         />
                         <span className="text-sm">{formatRecipeType(type)}</span>
                       </label>
@@ -622,7 +622,7 @@ export function RecipeListPage() {
                       <label
                         key={option.value}
                         className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors ${
-                          sortOption === option.value ? 'bg-orange-50 text-orange-700' : 'hover:bg-gray-50'
+                          sortOption === option.value ? 'bg-teal-50 text-teal-700' : 'hover:bg-gray-50'
                         }`}
                       >
                         <input
@@ -630,7 +630,7 @@ export function RecipeListPage() {
                           name="sortOption"
                           checked={sortOption === option.value}
                           onChange={() => setSortOption(option.value)}
-                          className="w-4 h-4 text-orange-600 focus:ring-orange-500"
+                          className="w-4 h-4 text-teal-600 focus:ring-teal-500"
                         />
                         <span className="text-sm">{option.label}</span>
                       </label>
@@ -642,7 +642,7 @@ export function RecipeListPage() {
               <div className="px-5 py-4 border-t border-gray-200 flex-shrink-0">
                 <button
                   onClick={() => setShowFilterModal(false)}
-                  className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-lg transition-colors text-sm"
+                  className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors text-sm"
                 >
                   Show Results ({filteredRecipes.length})
                 </button>

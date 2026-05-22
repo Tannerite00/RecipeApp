@@ -54,27 +54,22 @@ export function RecipeDetailPage() {
   function loadFromCache() {
     if (!id) return;
 
-    // Recipe
     const cached = cacheGet<Recipe[]>('recipes');
     const match = cached?.find((r) => r.id === id) ?? null;
     setRecipe(match);
     setLoading(false);
 
-    // Rating stats
     const cachedStats = cacheGet<Record<string, { average: number; count: number }>>('rating-stats');
     if (cachedStats?.[id]) {
       setRatingAverage(cachedStats[id].average);
       setRatingCount(cachedStats[id].count);
     }
 
-    // User
     const cachedUser = cacheGet<{ id: string }>('auth-user');
     setCurrentUserId(cachedUser?.id ?? null);
 
-    // Favorites
     setIsFavorited(getFavorites().has(id));
 
-    // Meal plans
     const offlinePlans = getOfflineMealPlans();
     if (offlinePlans.length) {
       setMealPlans(offlinePlans);
@@ -104,7 +99,6 @@ export function RecipeDetailPage() {
     });
     markDirty();
 
-    // Optimistically update local rating stats
     const stats = cacheGet<Record<string, { average: number; count: number }>>('rating-stats') || {};
     const existing = stats[id] || { average: 0, count: 0 };
     const newCount = existing.count + 1;
@@ -150,7 +144,6 @@ export function RecipeDetailPage() {
     });
     markDirty();
 
-    // Update meal-plans cache so MealPlanPage shows it
     const cachedPlans = cacheGet<any[]>('meal-plans');
     if (cachedPlans) {
       const plan = cachedPlans.find((p: any) => p.id === selectedMealPlan);
@@ -200,11 +193,11 @@ export function RecipeDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50 py-6 sm:py-8">
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 to-cyan-50 py-6 sm:py-8">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <button
           onClick={() => navigate(backPath)}
-          className="flex items-center gap-2 text-orange-600 hover:text-orange-700 mb-4 sm:mb-6 font-medium text-sm sm:text-base"
+          className="flex items-center gap-2 text-teal-600 hover:text-teal-700 mb-4 sm:mb-6 font-medium text-sm sm:text-base"
         >
           <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           {backText}
@@ -216,7 +209,7 @@ export function RecipeDetailPage() {
           <div className="mb-6 sm:mb-8 flex items-center gap-3">
             <button
               onClick={() => setShowMealPlanModal(true)}
-              className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg font-medium transition text-sm sm:text-base flex-1 sm:flex-none justify-center"
+              className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg font-medium transition text-sm sm:text-base flex-1 sm:flex-none justify-center"
             >
               <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
               Add to Meal Plan
@@ -258,7 +251,7 @@ export function RecipeDetailPage() {
                       if (next >= 1) setChosenServings(next === baseServingCount ? null : next);
                     }}
                     disabled={(activeServings ?? baseServingCount) <= 1}
-                    className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-teal-200 bg-teal-50 text-teal-600 hover:bg-teal-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     <Minus className="w-3.5 h-3.5" />
                   </button>
@@ -271,7 +264,7 @@ export function RecipeDetailPage() {
                       const next = (activeServings ?? baseServingCount) + 1;
                       setChosenServings(next === baseServingCount ? null : next);
                     }}
-                    className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors"
+                    className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-teal-200 bg-teal-50 text-teal-600 hover:bg-teal-100 transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>
@@ -296,7 +289,7 @@ export function RecipeDetailPage() {
                   <button
                     type="button"
                     onClick={() => navigate('/auth')}
-                    className="text-orange-600 hover:text-orange-700 font-medium"
+                    className="text-teal-600 hover:text-teal-700 font-medium"
                   >
                     Sign in
                   </button>{' '}
@@ -313,7 +306,7 @@ export function RecipeDetailPage() {
             <div className="flex items-center gap-3 mb-3 sm:mb-4">
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Ingredients</h2>
               {servingMultiplier !== 1 && (
-                <span className="text-xs font-medium bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                <span className="text-xs font-medium bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full">
                   Adjusted for {activeServings} servings
                 </span>
               )}
@@ -323,7 +316,7 @@ export function RecipeDetailPage() {
                 const scaled = scaleIngredient(ingredient, servingMultiplier);
                 return scaled ? (
                   <li key={idx} className="flex items-start gap-3 text-gray-700">
-                    <span className="text-orange-600 font-bold mt-1">&#8226;</span>
+                    <span className="text-teal-600 font-bold mt-1">&#8226;</span>
                     <span>{scaled}</span>
                   </li>
                 ) : null;
@@ -336,7 +329,7 @@ export function RecipeDetailPage() {
             <ol className="space-y-3 sm:space-y-4">
               {recipe.instructions.map((instruction, idx) => (
                 <li key={idx} className="flex gap-3 sm:gap-4">
-                  <span className="flex-shrink-0 flex items-center justify-center h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-orange-100 text-orange-600 font-bold text-sm sm:text-base">
+                  <span className="flex-shrink-0 flex items-center justify-center h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-teal-100 text-teal-600 font-bold text-sm sm:text-base">
                     {idx + 1}
                   </span>
                   <p className="text-sm sm:text-base text-gray-700 pt-0.5 sm:pt-1">{instruction.replace(/<[^>]*>/g, '')}</p>
@@ -376,7 +369,7 @@ export function RecipeDetailPage() {
                     setSelectedMealPlan(e.target.value);
                     setSelectedDayIndex('');
                   }}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                 >
                   {mealPlans.map((plan) => {
                     const [y, m, d] = plan.week_start_date.split('-').map(Number);
@@ -400,7 +393,7 @@ export function RecipeDetailPage() {
                     setSelectedDayIndex(e.target.value === '' ? '' : Number(e.target.value))
                   }
                   disabled={!selectedMealPlan}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white disabled:bg-gray-100"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white disabled:bg-gray-100"
                 >
                   <option value="">Choose a day...</option>
                   {selectedMealPlan &&
@@ -429,7 +422,7 @@ export function RecipeDetailPage() {
                 <button
                   onClick={addToMealPlan}
                   disabled={selectedDayIndex === ''}
-                  className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg font-medium hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Add
                 </button>

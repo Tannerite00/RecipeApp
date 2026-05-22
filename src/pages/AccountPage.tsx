@@ -59,7 +59,6 @@ function BugReportModal({ user, onClose }: BugReportModalProps) {
       );
       if (!res.ok) throw new Error('Failed to send');
     } catch {
-      // Fall back to storing locally so the report isn't lost
       await supabase.from('bug_reports').insert({
         user_id: user.id,
         user_email: user.email ?? '',
@@ -90,7 +89,7 @@ function BugReportModal({ user, onClose }: BugReportModalProps) {
           </p>
           <button
             onClick={onClose}
-            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-3 rounded-xl transition text-sm"
+            className="w-full bg-teal-600 hover:bg-teal-700 text-white font-medium py-3 rounded-xl transition text-sm"
           >
             Done
           </button>
@@ -110,15 +109,14 @@ function BugReportModal({ user, onClose }: BugReportModalProps) {
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg animate-fade-in">
-        {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <div className="bg-orange-100 rounded-lg p-2">
-              <Bug className="w-5 h-5 text-orange-600" />
+            <div className="bg-teal-100 rounded-lg p-2">
+              <Bug className="w-5 h-5 text-teal-600" />
             </div>
             <div>
               <h3 className="text-lg font-bold text-gray-900">Report a Bug</h3>
-              <p className="text-xs text-gray-500">Help us improve RecipeHub</p>
+              <p className="text-xs text-gray-500">Help us improve Bento</p>
             </div>
           </div>
           <button
@@ -130,7 +128,6 @@ function BugReportModal({ user, onClose }: BugReportModalProps) {
           </button>
         </div>
 
-        {/* Body */}
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -141,7 +138,7 @@ function BugReportModal({ user, onClose }: BugReportModalProps) {
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Please describe the bug you encountered — what happened, what you expected to happen, and the steps to reproduce it..."
               rows={8}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition"
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
               autoFocus
             />
             <div className="flex items-center justify-between mt-1.5">
@@ -152,8 +149,8 @@ function BugReportModal({ user, onClose }: BugReportModalProps) {
             </div>
           </div>
 
-          <div className="bg-orange-50 border border-orange-100 rounded-xl px-4 py-3">
-            <p className="text-xs text-orange-700">
+          <div className="bg-teal-50 border border-teal-100 rounded-xl px-4 py-3">
+            <p className="text-xs text-teal-700">
               Your report will be sent directly to our support team. Your email address will be included so we can follow up if needed.
             </p>
           </div>
@@ -169,7 +166,7 @@ function BugReportModal({ user, onClose }: BugReportModalProps) {
             <button
               type="submit"
               disabled={!isReady || submitting}
-              className="flex-1 flex items-center justify-center gap-2 py-3 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-xl transition text-sm"
+              className="flex-1 flex items-center justify-center gap-2 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-xl transition text-sm"
             >
               {submitting ? (
                 <span>Sending...</span>
@@ -321,7 +318,7 @@ export function AccountPage() {
   const joinedAt = user.created_at ? new Date(user.created_at).toLocaleDateString() : '\u2014';
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] sm:min-h-[calc(100vh-4rem)] bg-gradient-to-br from-orange-50 to-amber-50 py-6 sm:py-10 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-[calc(100vh-3.5rem)] sm:min-h-[calc(100vh-4rem)] bg-gradient-to-br from-teal-50 to-cyan-50 py-6 sm:py-10 px-4 sm:px-6 lg:px-8">
 
       {signInToast && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 animate-fade-in-down">
@@ -338,7 +335,7 @@ export function AccountPage() {
       <div className="w-full max-w-2xl mx-auto">
         <button
           onClick={() => navigate('/')}
-          className="flex items-center gap-2 text-orange-600 hover:text-orange-700 mb-4 sm:mb-6 font-medium text-sm sm:text-base"
+          className="flex items-center gap-2 text-teal-600 hover:text-teal-700 mb-4 sm:mb-6 font-medium text-sm sm:text-base"
         >
           <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           Back to Recipes
@@ -354,8 +351,8 @@ export function AccountPage() {
           <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Profile</h2>
           <div className="space-y-4">
             <div className="flex items-start gap-3 py-3 border-b border-gray-100">
-              <div className="bg-orange-100 rounded-lg p-2 flex-shrink-0">
-                <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600" />
+              <div className="bg-teal-100 rounded-lg p-2 flex-shrink-0">
+                <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-teal-600" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wide">Email Address</p>
@@ -363,8 +360,8 @@ export function AccountPage() {
               </div>
             </div>
             <div className="flex items-start gap-3 py-3">
-              <div className="bg-orange-100 rounded-lg p-2 flex-shrink-0">
-                <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600" />
+              <div className="bg-teal-100 rounded-lg p-2 flex-shrink-0">
+                <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-teal-600" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wide">Member Since</p>
@@ -381,7 +378,7 @@ export function AccountPage() {
           {userRatings.length === 0 ? (
             <p className="text-sm text-gray-500">
               You haven't rated any recipes yet. Browse the{' '}
-              <Link to="/" className="text-orange-600 hover:text-orange-700 font-medium">recipe collection</Link>{' '}
+              <Link to="/" className="text-teal-600 hover:text-teal-700 font-medium">recipe collection</Link>{' '}
               to leave your first rating.
             </p>
           ) : (
@@ -390,7 +387,7 @@ export function AccountPage() {
                 <li key={r.id} className="py-3 flex items-center justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     {r.recipe ? (
-                      <Link to={`/recipe/${r.recipe.id}`} className="block text-sm sm:text-base font-medium text-gray-900 hover:text-orange-700 truncate">{r.recipe.title}</Link>
+                      <Link to={`/recipe/${r.recipe.id}`} className="block text-sm sm:text-base font-medium text-gray-900 hover:text-teal-700 truncate">{r.recipe.title}</Link>
                     ) : (
                       <span className="block text-sm sm:text-base font-medium text-gray-500 italic">Recipe removed</span>
                     )}
@@ -406,7 +403,7 @@ export function AccountPage() {
         {/* Comments */}
         <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 mb-6">
           <div className="flex items-center gap-2 mb-1">
-            <MessageCircle className="w-5 h-5 text-orange-600" />
+            <MessageCircle className="w-5 h-5 text-teal-600" />
             <h2 className="text-lg sm:text-xl font-bold text-gray-900">Your Comments</h2>
           </div>
           <p className="text-sm text-gray-600 mb-4">Comments you've posted ({userComments.length})</p>
@@ -419,7 +416,7 @@ export function AccountPage() {
                   <div className="flex items-start justify-between gap-3 mb-1">
                     <div className="min-w-0 flex-1">
                       {c.recipe ? (
-                        <Link to={`/recipe/${c.recipe.id}`} className="block text-sm sm:text-base font-medium text-gray-900 hover:text-orange-700 truncate">{c.recipe.title}</Link>
+                        <Link to={`/recipe/${c.recipe.id}`} className="block text-sm sm:text-base font-medium text-gray-900 hover:text-teal-700 truncate">{c.recipe.title}</Link>
                       ) : (
                         <span className="block text-sm sm:text-base font-medium text-gray-500 italic">Recipe removed</span>
                       )}
@@ -450,7 +447,7 @@ export function AccountPage() {
               <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1.5">New Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input id="newPassword" type="password" required autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Create a strong password" className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm sm:text-base" />
+                <input id="newPassword" type="password" required autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Create a strong password" className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm sm:text-base" />
               </div>
               <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
                 {ruleResults.map((rule) => (
@@ -465,13 +462,13 @@ export function AccountPage() {
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1.5">Confirm New Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input id="confirmPassword" type="password" required autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Re-enter your new password" className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent text-sm sm:text-base ${confirmPassword.length > 0 && !isPasswordMatch ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-orange-500'}`} />
+                <input id="confirmPassword" type="password" required autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Re-enter your new password" className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent text-sm sm:text-base ${confirmPassword.length > 0 && !isPasswordMatch ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-teal-500'}`} />
               </div>
               {confirmPassword.length > 0 && !isPasswordMatch && <p className="mt-1.5 text-xs text-red-600">Passwords do not match.</p>}
             </div>
             {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-2.5">{error}</div>}
             {message && <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-2.5">{message}</div>}
-            <button type="submit" disabled={updating || !canUpdate} className="w-full sm:w-auto bg-orange-600 hover:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium px-6 py-2.5 sm:py-3 rounded-lg transition text-sm sm:text-base">{updating ? 'Updating...' : 'Update Password'}</button>
+            <button type="submit" disabled={updating || !canUpdate} className="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium px-6 py-2.5 sm:py-3 rounded-lg transition text-sm sm:text-base">{updating ? 'Updating...' : 'Update Password'}</button>
           </form>
         </div>
 
