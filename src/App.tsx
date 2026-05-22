@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Navigation } from './components/Navigation';
 import { RecipeListPage } from './pages/RecipeListPage';
 import { RecipeDetailPage } from './pages/RecipeDetailPage';
+import { AddRecipePage } from './pages/AddRecipePage';
 import { MealPlanPage } from './pages/MealPlanPage';
 import { GroceryListPage } from './pages/GroceryListPage';
 import { AuthPage } from './pages/AuthPage';
@@ -15,6 +16,7 @@ function App() {
         <Routes>
           <Route path="/" element={<RecipeListPage />} />
           <Route path="/recipe/:id" element={<RecipeDetailPage />} />
+          <Route path="/add-recipe" element={<AddRecipePage />} />
           <Route path="/meal-plans" element={<MealPlanPage />} />
           <Route path="/grocery-list" element={<GroceryListPage />} />
           <Route path="/auth" element={<AuthPage />} />

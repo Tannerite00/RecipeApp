@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, X, ArrowLeft, SlidersHorizontal, Heart, ChevronDown } from 'lucide-react';
+import { Search, X, ArrowLeft, SlidersHorizontal, Heart, ChevronDown, PlusCircle } from 'lucide-react';
 import { type Recipe } from '../lib/supabase';
 import { parseISO8601Duration, formatRecipeType, durationToMinutes } from '../lib/utils';
 import { StarRating } from '../components/StarRating';
@@ -319,9 +319,19 @@ export function RecipeListPage() {
           </div>
         )}
 
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2">Recipe Collection</h1>
-          <p className="text-sm sm:text-base text-gray-600">Browse and discover delicious recipes</p>
+        <div className="mb-6 sm:mb-8 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2">Recipe Collection</h1>
+            <p className="text-sm sm:text-base text-gray-600">Browse and discover delicious recipes</p>
+          </div>
+          <button
+            onClick={() => navigate('/add-recipe')}
+            className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-lg font-medium transition text-sm sm:text-base flex-shrink-0 shadow-sm"
+          >
+            <PlusCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="hidden sm:inline">Add Recipe</span>
+            <span className="sm:hidden">Add</span>
+          </button>
         </div>
 
         <div className="mb-8 space-y-4">
