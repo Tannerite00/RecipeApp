@@ -644,7 +644,7 @@ export function RecipeListPage() {
                   onClick={() => setShowFilterModal(false)}
                   className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors text-sm"
                 >
-                  Show Results ({filteredRecipes.length})
+                  Show Results
                 </button>
               </div>
             </div>
