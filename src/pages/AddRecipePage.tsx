@@ -1,12 +1,18 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { cacheGet, cacheSet } from '../lib/offlineCache';
+import { formatRecipeType } from '../lib/utils';
 import type { Recipe } from '../lib/supabase';
 
 export function AddRecipePage() {
   const navigate = useNavigate();
+
+  const recipeTypes = useMemo(() => {
+    const cached = cacheGet<Recipe[]>('recipes') ?? [];
+    return Array.from(new Set(cached.map((r) => r.type).filter(Boolean))).sort() as string[];
+  }, []);
 
   const [title, setTitle] = useState('');
   const [servings, setServings] = useState('');
@@ -74,7 +80,7 @@ export function AddRecipePage() {
       .from('recipes')
       .insert({
         title: title.trim(),
-        type: type.trim() || null,
+        type: type || null,
         servings: servings.trim() || null,
         prep_time: prepTime.trim() || null,
         cook_time: cookTime.trim() || null,
@@ -182,13 +188,16 @@ export function AddRecipePage() {
               <label className="block text-xs sm:text-sm font-semibold text-gray-600 uppercase mb-1">
                 Type
               </label>
-              <input
-                type="text"
+              <select
                 value={type}
                 onChange={(e) => setType(e.target.value)}
-                placeholder="e.g. Dinner"
-                className="w-full text-base sm:text-lg font-bold text-gray-900 placeholder-gray-300 border-b-2 border-gray-200 focus:border-orange-400 focus:outline-none pb-0.5 bg-transparent"
-              />
+                className="w-full text-base sm:text-lg font-bold text-gray-900 border-b-2 border-gray-200 focus:border-orange-400 focus:outline-none pb-0.5 bg-transparent appearance-none cursor-pointer"
+              >
+                <option value="">— Select —</option>
+                {recipeTypes.map((t) => (
+                  <option key={t} value={t}>{formatRecipeType(t)}</option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -274,3 +283,6 @@ export function AddRecipePage() {
     </div>
   );
 }
+
+
+export { AddRecipePage }
