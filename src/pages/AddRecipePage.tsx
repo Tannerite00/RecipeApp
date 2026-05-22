@@ -99,7 +99,6 @@ export function AddRecipePage() {
       return;
     }
 
-    // Add to local cache so it appears immediately in the list
     const cached = cacheGet<Recipe[]>('recipes') ?? [];
     cacheSet('recipes', [...cached, data as Recipe]);
 
@@ -283,6 +282,3 @@ export function AddRecipePage() {
     </div>
   );
 }
-
-
-export { AddRecipePage }
