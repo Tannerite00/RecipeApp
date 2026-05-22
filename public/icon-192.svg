@@ -1,10 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
-  <rect width="192" height="192" rx="36" fill="#ea580c"/>
-  <g transform="translate(96,100)" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M-30,8 C-30,8 -38,-8 -38,-23 C-38,-42 -23,-53 -8,-53 C0,-60 15,-60 23,-53 C38,-53 45,-42 45,-23 C45,-8 38,8 38,8" fill="#fff" stroke="#fff"/>
-    <line x1="-30" y1="8" x2="38" y2="8"/>
-    <rect x="-30" y="8" width="68" height="15" rx="3" fill="#ea580c" stroke="#fff"/>
-    <path d="M-11,-60 C-11,-70 -4,-70 -4,-80" stroke="#fff" stroke-width="6" fill="none"/>
-    <path d="M12,-58 C12,-68 19,-68 19,-78" stroke="#fff" stroke-width="6" fill="none"/>
-  </g>
+  <rect width="192" height="192" rx="36" fill="#2dd4bf"/>
+  <text
+    x="96"
+    y="128"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="120"
+    font-weight="bold"
+    font-style="italic"
+    fill="white"
+    text-anchor="middle"
+  >B</text>
 </svg>

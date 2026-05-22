@@ -1,11 +1,11 @@
 {
-  "name": "RecipeHub",
-  "short_name": "RecipeHub",
+  "name": "Bento",
+  "short_name": "Bento",
   "description": "Plan meals, browse recipes, and build grocery lists",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f9fafb",
-  "theme_color": "#ea580c",
+  "theme_color": "#2dd4bf",
   "icons": [
     {
       "src": "/icon-192.svg",

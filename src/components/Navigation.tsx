@@ -1,4 +1,4 @@
-import { ChefHat, LogIn, CircleUser as UserCircle2 } from 'lucide-react';
+import { LogIn, CircleUser as UserCircle2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -27,8 +27,10 @@ export function Navigation() {
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-14 sm:h-16 gap-2">
           <div className="flex items-center gap-2 cursor-pointer flex-shrink-0" onClick={() => navigate('/')}>
-            <ChefHat className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600" />
-            <span className="text-base sm:text-xl font-bold text-gray-900">RecipeHub</span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#2dd4bf' }}>
+              <span className="text-white font-bold italic text-base sm:text-lg leading-none select-none">B</span>
+            </div>
+            <span className="text-base sm:text-xl font-bold text-gray-900">Bento</span>
           </div>
 
           <div className="flex gap-0.5 sm:gap-1">
