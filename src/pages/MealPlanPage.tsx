@@ -94,6 +94,7 @@ export function MealPlanPage() {
   const dragItem = useRef<{ itemId: string; fromDay: number } | null>(null);
   const [dragOverDay, setDragOverDay] = useState<number | null>(null);
   const [servingOverrides, setServingOverridesState] = useState<Record<string, number>>(getServingOverrides);
+  const pendingAdd = useRef<{ mealPlanId: string; recipeId: string; dayOfWeek: number; recipeTitle: string } | null>(null);
 
   function handleServingChange(itemId: string, recipe: Recipe, newServings: number) {
     const base = parseServingCount(recipe.servings);
@@ -132,7 +133,7 @@ export function MealPlanPage() {
     });
   }, []);
 
-  // Handle returning from recipe list with a recipe to add
+  // Capture pending add from navigation state immediately (before loading completes)
   useEffect(() => {
     const state = location.state as {
       addRecipeToMealPlan?: boolean;
@@ -143,10 +144,24 @@ export function MealPlanPage() {
     } | null;
 
     if (state?.addRecipeToMealPlan && state.mealPlanId && state.recipeId != null && state.dayOfWeek != null) {
-      addRecipeToDay(state.mealPlanId, state.recipeId, state.dayOfWeek, state.recipeTitle ?? '');
+      pendingAdd.current = {
+        mealPlanId: state.mealPlanId,
+        recipeId: state.recipeId,
+        dayOfWeek: state.dayOfWeek,
+        recipeTitle: state.recipeTitle ?? '',
+      };
       window.history.replaceState({}, '');
     }
   }, [location.state]);
+
+  // Apply pending add once loading is complete and mealPlans are populated
+  useEffect(() => {
+    if (loading) return;
+    if (!pendingAdd.current) return;
+    const { mealPlanId, recipeId, dayOfWeek, recipeTitle } = pendingAdd.current;
+    pendingAdd.current = null;
+    addRecipeToDay(mealPlanId, recipeId, dayOfWeek, recipeTitle);
+  }, [loading]);
 
   function selectCurrentWeek(plans: MealPlanWithItems[]) {
     if (plans.length === 0) return;
