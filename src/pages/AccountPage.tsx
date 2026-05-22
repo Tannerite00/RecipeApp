@@ -9,8 +9,6 @@ import { cacheGet, cacheSet, enqueueCommentOp } from '../lib/offlineCache';
 import { formatRecipeType } from '../lib/utils';
 import { markDirty, flushWrites, forceSync } from '../lib/syncManager';
 
-const SUPPORT_EMAIL = 'tanner.dodd@gmail.com';
-
 const SPECIAL_CHARS = /[`!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/;
 
 const PASSWORD_RULES: { key: string; label: string; test: (v: string) => boolean }[] = [
@@ -46,20 +44,28 @@ function BugReportModal({ user, onClose }: BugReportModalProps) {
     setSubmitting(true);
 
     try {
-      // Store in Supabase (best-effort, no hard failure if DB unavailable)
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-bug-report`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ message: message.trim() }),
+        }
+      );
+      if (!res.ok) throw new Error('Failed to send');
+    } catch {
+      // Fall back to storing locally so the report isn't lost
       await supabase.from('bug_reports').insert({
         user_id: user.id,
         user_email: user.email ?? '',
         message: message.trim(),
       }).then(() => {});
-    } catch {}
-
-    // Open pre-filled mailto so the report also reaches email
-    const subject = encodeURIComponent('RecipeHub Bug Report');
-    const body = encodeURIComponent(
-      `From: ${user.email ?? 'unknown'}\n\n${message.trim()}`
-    );
-    window.open(`mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`, '_blank');
+    }
 
     setSubmitting(false);
     setSubmitted(true);
@@ -148,8 +154,7 @@ function BugReportModal({ user, onClose }: BugReportModalProps) {
 
           <div className="bg-orange-50 border border-orange-100 rounded-xl px-4 py-3">
             <p className="text-xs text-orange-700">
-              Your report will be sent to our support team at{' '}
-              <span className="font-medium">{SUPPORT_EMAIL}</span>. Your email address will be included so we can follow up if needed.
+              Your report will be sent directly to our support team. Your email address will be included so we can follow up if needed.
             </p>
           </div>
 
