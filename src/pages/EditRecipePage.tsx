@@ -1,18 +1,20 @@
-import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, Save, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { cacheGet, cacheSet } from '../lib/offlineCache';
 import { formatRecipeType } from '../lib/utils';
 import type { Recipe } from '../lib/supabase';
 
-export function AddRecipePage() {
+export function EditRecipePage() {
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const recipeTypes = useMemo(() => {
-    const cached = cacheGet<Recipe[]>('recipes') ?? [];
-    return Array.from(new Set(cached.map((r) => r.type).filter(Boolean))).sort() as string[];
-  }, []);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [forbidden, setForbidden] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [title, setTitle] = useState('');
   const [servings, setServings] = useState('');
@@ -21,107 +23,149 @@ export function AddRecipePage() {
   const [type, setType] = useState('');
   const [ingredients, setIngredients] = useState<string[]>(['']);
   const [instructions, setInstructions] = useState<string[]>(['']);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  const recipeTypes = useMemo(() => {
+    const cached = cacheGet<Recipe[]>('recipes') ?? [];
+    return Array.from(new Set(cached.map((r) => r.type).filter(Boolean))).sort() as string[];
+  }, []);
+
+  useEffect(() => {
+    if (!id) { setNotFound(true); setLoading(false); return; }
+
+    const cachedUser = cacheGet<{ id: string }>('auth-user');
+    if (!cachedUser?.id) { navigate('/auth'); return; }
+
+    // Try cache first
+    const cached = cacheGet<Recipe[]>('recipes');
+    const fromCache = cached?.find((r) => r.id === id);
+    if (fromCache) {
+      if (fromCache.user_id !== cachedUser.id) { setForbidden(true); setLoading(false); return; }
+      populate(fromCache);
+      setLoading(false);
+      return;
+    }
+
+    // Fallback to DB
+    supabase.from('recipes').select('*').eq('id', id).maybeSingle().then(({ data, error: err }) => {
+      if (err || !data) { setNotFound(true); setLoading(false); return; }
+      if (data.user_id !== cachedUser.id) { setForbidden(true); setLoading(false); return; }
+      populate(data as Recipe);
+      setLoading(false);
+    });
+  }, [id, navigate]);
+
+  function populate(r: Recipe) {
+    setTitle(r.title);
+    setServings(r.servings ?? '');
+    setPrepTime(r.prep_time ?? '');
+    setCookTime(r.cook_time ?? '');
+    setType(r.type ?? '');
+    setIngredients(r.ingredients?.length ? r.ingredients : ['']);
+    setInstructions(r.instructions?.length ? r.instructions : ['']);
+  }
 
   function updateIngredient(idx: number, value: string) {
     setIngredients((prev) => prev.map((v, i) => (i === idx ? value : v)));
   }
-
-  function addIngredient() {
-    setIngredients((prev) => [...prev, '']);
-  }
-
-  function removeIngredient(idx: number) {
-    setIngredients((prev) => prev.filter((_, i) => i !== idx));
-  }
+  function addIngredient() { setIngredients((prev) => [...prev, '']); }
+  function removeIngredient(idx: number) { setIngredients((prev) => prev.filter((_, i) => i !== idx)); }
 
   function updateInstruction(idx: number, value: string) {
     setInstructions((prev) => prev.map((v, i) => (i === idx ? value : v)));
   }
-
-  function addInstruction() {
-    setInstructions((prev) => [...prev, '']);
-  }
-
-  function removeInstruction(idx: number) {
-    setInstructions((prev) => prev.filter((_, i) => i !== idx));
-  }
+  function addInstruction() { setInstructions((prev) => [...prev, '']); }
+  function removeInstruction(idx: number) { setInstructions((prev) => prev.filter((_, i) => i !== idx)); }
 
   async function handleSave() {
     setError(null);
 
-    if (!title.trim()) {
-      setError('Please enter a recipe title.');
-      return;
-    }
+    if (!title.trim()) { setError('Please enter a recipe title.'); return; }
 
     const cleanIngredients = ingredients.map((s) => s.trim()).filter(Boolean);
     const cleanInstructions = instructions.map((s) => s.trim()).filter(Boolean);
 
-    if (cleanIngredients.length === 0) {
-      setError('Please add at least one ingredient.');
-      return;
-    }
-    if (cleanInstructions.length === 0) {
-      setError('Please add at least one instruction step.');
-      return;
-    }
-
-    const cachedUser = cacheGet<{ id: string }>('auth-user');
-    if (!cachedUser?.id) {
-      navigate('/auth');
-      return;
-    }
+    if (cleanIngredients.length === 0) { setError('Please add at least one ingredient.'); return; }
+    if (cleanInstructions.length === 0) { setError('Please add at least one instruction step.'); return; }
 
     setSaving(true);
 
-    const { data, error: insertError } = await supabase
+    const updates = {
+      title: title.trim(),
+      type: type || null,
+      servings: servings.trim() || null,
+      prep_time: prepTime.trim() || null,
+      cook_time: cookTime.trim() || null,
+      ingredients: cleanIngredients,
+      instructions: cleanInstructions,
+    };
+
+    const { data, error: updateError } = await supabase
       .from('recipes')
-      .insert({
-        title: title.trim(),
-        type: type || null,
-        servings: servings.trim() || null,
-        prep_time: prepTime.trim() || null,
-        cook_time: cookTime.trim() || null,
-        ingredients: cleanIngredients,
-        instructions: cleanInstructions,
-        user_id: cachedUser.id,
-        is_user_recipe: true,
-      })
+      .update(updates)
+      .eq('id', id!)
       .select()
       .single();
 
     setSaving(false);
 
-    if (insertError) {
-      setError('Failed to save recipe. Please try again.');
-      return;
+    if (updateError) { setError('Failed to save changes. Please try again.'); return; }
+
+    const updatedRecipe = data as Recipe;
+
+    // Update global recipes cache incrementally
+    const cachedRecipes = cacheGet<Recipe[]>('recipes') ?? [];
+    cacheSet('recipes', cachedRecipes.map((r) => (r.id === id ? updatedRecipe : r)));
+
+    // Update user-recipes cache incrementally
+    const cachedUser = cacheGet<{ id: string }>('auth-user');
+    if (cachedUser?.id) {
+      const userKey = `user-recipes:${cachedUser.id}`;
+      const cachedUserRecipes = cacheGet<Recipe[]>(userKey) ?? [];
+      cacheSet(userKey, cachedUserRecipes.map((r) => (r.id === id ? updatedRecipe : r)));
     }
 
-    const newRecipe = data as Recipe;
+    navigate(`/recipe/${id}`);
+  }
 
-    // Append to global recipes cache (incremental — avoids re-fetching entire list)
-    const cached = cacheGet<Recipe[]>('recipes') ?? [];
-    cacheSet('recipes', [...cached, newRecipe]);
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    );
+  }
 
-    // Append to user's own recipes cache
-    const userCacheKey = `user-recipes:${cachedUser.id}`;
-    const cachedUserRecipes = cacheGet<Recipe[]>(userCacheKey) ?? [];
-    cacheSet(userCacheKey, [newRecipe, ...cachedUserRecipes]);
+  if (notFound) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600 mb-4">Recipe not found.</p>
+          <button onClick={() => navigate('/')} className="text-teal-600 font-medium hover:text-teal-700">Back to Recipes</button>
+        </div>
+      </div>
+    );
+  }
 
-    navigate(`/recipe/${data.id}`);
+  if (forbidden) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600 mb-4">You don't have permission to edit this recipe.</p>
+          <button onClick={() => navigate(-1)} className="text-teal-600 font-medium hover:text-teal-700">Go Back</button>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 to-cyan-50 py-6 sm:py-8">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate(-1)}
           className="flex items-center gap-2 text-teal-600 hover:text-teal-700 mb-4 sm:mb-6 font-medium text-sm sm:text-base"
         >
           <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-          Back to Recipes
+          Back
         </button>
 
         <div className="bg-white rounded-lg shadow-lg p-5 sm:p-8 mb-6">
@@ -140,15 +184,15 @@ export function AddRecipePage() {
             />
           </div>
 
-          {/* Save button area */}
+          {/* Save button */}
           <div className="mb-6 sm:mb-8 flex items-center gap-3 flex-wrap">
             <button
               onClick={handleSave}
               disabled={saving}
               className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg font-medium transition text-sm sm:text-base"
             >
-              <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-              {saving ? 'Saving...' : 'Save Recipe'}
+              <Save className="w-4 h-4 sm:w-5 sm:h-5" />
+              {saving ? 'Saving...' : 'Save Changes'}
             </button>
             {error && <p className="text-sm text-red-600">{error}</p>}
           </div>
@@ -156,9 +200,7 @@ export function AddRecipePage() {
           {/* Stats grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8 pb-6 sm:pb-8 border-b border-gray-200">
             <div>
-              <label className="block text-xs sm:text-sm font-semibold text-gray-600 uppercase mb-1">
-                Prep Time
-              </label>
+              <label className="block text-xs sm:text-sm font-semibold text-gray-600 uppercase mb-1">Prep Time</label>
               <input
                 type="text"
                 value={prepTime}
@@ -168,9 +210,7 @@ export function AddRecipePage() {
               />
             </div>
             <div>
-              <label className="block text-xs sm:text-sm font-semibold text-gray-600 uppercase mb-1">
-                Cook Time
-              </label>
+              <label className="block text-xs sm:text-sm font-semibold text-gray-600 uppercase mb-1">Cook Time</label>
               <input
                 type="text"
                 value={cookTime}
@@ -180,9 +220,7 @@ export function AddRecipePage() {
               />
             </div>
             <div>
-              <label className="block text-xs sm:text-sm font-semibold text-gray-600 uppercase mb-1">
-                Servings
-              </label>
+              <label className="block text-xs sm:text-sm font-semibold text-gray-600 uppercase mb-1">Servings</label>
               <input
                 type="text"
                 value={servings}
@@ -192,9 +230,7 @@ export function AddRecipePage() {
               />
             </div>
             <div>
-              <label className="block text-xs sm:text-sm font-semibold text-gray-600 uppercase mb-1">
-                Type
-              </label>
+              <label className="block text-xs sm:text-sm font-semibold text-gray-600 uppercase mb-1">Type</label>
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value)}
@@ -285,6 +321,7 @@ export function AddRecipePage() {
               Add step
             </button>
           </div>
+
         </div>
       </div>
     </div>

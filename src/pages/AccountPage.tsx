@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Mail, Lock, LogOut, Calendar, Check, X, MessageCircle, Trash2, Bug, Send, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Mail, Lock, LogOut, Calendar, Check, X, MessageCircle, Trash2, Bug, Send, CheckCircle2, ChefHat, Pencil } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
+import type { Recipe } from '../lib/supabase';
 import { StarRating } from '../components/StarRating';
 import { Link } from 'react-router-dom';
 import { cacheGet, cacheSet, enqueueCommentOp } from '../lib/offlineCache';
@@ -206,6 +207,7 @@ export function AccountPage() {
   const [userComments, setUserComments] = useState<
     { id: string; content: string; created_at: string; recipe: { id: string; title: string } | null }[]
   >([]);
+  const [userRecipes, setUserRecipes] = useState<Recipe[]>([]);
 
   useEffect(() => {
     const cachedUser = cacheGet<User>('auth-user');
@@ -252,6 +254,9 @@ export function AccountPage() {
 
     const cachedComments = cacheGet<typeof userComments>(`user-comments:${uid}`);
     if (cachedComments) setUserComments(cachedComments);
+
+    const cachedUserRecipes = cacheGet<Recipe[]>(`user-recipes:${uid}`);
+    if (cachedUserRecipes) setUserRecipes(cachedUserRecipes);
   }
 
   function handleDeleteComment(id: string) {
@@ -433,6 +438,46 @@ export function AccountPage() {
                     </button>
                   </div>
                   <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">{c.content}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* My Recipes */}
+        <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 mb-6">
+          <div className="flex items-center gap-2 mb-1">
+            <ChefHat className="w-5 h-5 text-teal-600" />
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900">My Recipes</h2>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">Recipes you've added ({userRecipes.length})</p>
+          {userRecipes.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              You haven't added any recipes yet.{' '}
+              <Link to="/add-recipe" className="text-teal-600 hover:text-teal-700 font-medium">Add your first recipe.</Link>
+            </p>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {userRecipes.map((r) => (
+                <li key={r.id} className="py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      to={`/recipe/${r.id}`}
+                      className="block text-sm sm:text-base font-medium text-gray-900 hover:text-teal-700 truncate"
+                    >
+                      {r.title}
+                    </Link>
+                    {r.type && (
+                      <p className="text-xs text-gray-500 mt-0.5">{formatRecipeType(r.type)}</p>
+                    )}
+                  </div>
+                  <Link
+                    to={`/edit-recipe/${r.id}`}
+                    className="flex-shrink-0 flex items-center gap-1.5 text-xs font-medium text-teal-600 hover:text-teal-700 bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    Edit
+                  </Link>
                 </li>
               ))}
             </ul>

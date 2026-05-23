@@ -17,6 +17,8 @@ export interface Recipe {
   rating: number | null;
   url: string;
   created_at: string;
+  user_id: string | null;
+  is_user_recipe: boolean;
 }
 
 export interface MealPlan {

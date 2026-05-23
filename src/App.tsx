@@ -7,6 +7,7 @@ import { MealPlanPage } from './pages/MealPlanPage';
 import { GroceryListPage } from './pages/GroceryListPage';
 import { AuthPage } from './pages/AuthPage';
 import { AccountPage } from './pages/AccountPage';
+import { EditRecipePage } from './pages/EditRecipePage';
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
           <Route path="/grocery-list" element={<GroceryListPage />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/account" element={<AccountPage />} />
+          <Route path="/edit-recipe/:id" element={<EditRecipePage />} />
         </Routes>
       </div>
     </BrowserRouter>

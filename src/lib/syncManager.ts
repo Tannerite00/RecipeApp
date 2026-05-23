@@ -341,8 +341,14 @@ async function pullUserData(): Promise<void> {
       .order('created_at', { ascending: false });
     if (comments) cacheSet(`user-comments:${uid}`, comments);
 
-    // All comments for recipes user has visited (pull for each cached key)
-    // Not worth enumerating all recipes; this will refresh on next page visit via sync
+    // User's own submitted recipes
+    const { data: userRecipes } = await supabase
+      .from('recipes')
+      .select('*')
+      .eq('user_id', uid)
+      .eq('is_user_recipe', true)
+      .order('created_at', { ascending: false });
+    if (userRecipes) cacheSet(`user-recipes:${uid}`, userRecipes);
   } catch {}
 }
 
