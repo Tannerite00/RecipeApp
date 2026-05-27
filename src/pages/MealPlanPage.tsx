@@ -4,7 +4,7 @@ import { Trash2, Plus, Minus, GripVertical } from 'lucide-react';
 import { type MealPlan, type Recipe } from '../lib/supabase';
 import { cutoffWeekStart, currentWeekStart, plannableWeekStarts } from '../lib/mealPlanWeeks';
 import { cacheGet, cacheSet, enqueueMealPlanOp, getServingOverrides, setServingOverride, removeServingOverride } from '../lib/offlineCache';
-import { markDirty, flushWrites, forceSync } from '../lib/syncManager';
+import { markDirty, flushWrites, runSync } from '../lib/syncManager';
 import { parseServingCount } from '../lib/servingScale';
 
 interface MealPlanItemEntry {
@@ -123,7 +123,7 @@ export function MealPlanPage() {
     selectCurrentWeek(cached);
     setLoading(false);
 
-    forceSync().then(() => {
+    runSync().then(() => {
       let fresh = cacheGet<MealPlanWithItems[]>('meal-plans');
       if (fresh && fresh.length) {
         fresh = ensurePlansHaveCurrentWeeks(fresh);

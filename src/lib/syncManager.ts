@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import {
+  cacheGet,
   cacheSet,
   readRatingQueue,
   writeRatingQueue,
@@ -10,14 +11,15 @@ import {
 } from './offlineCache';
 import { plannableWeekStarts, cutoffWeekStart } from './mealPlanWeeks';
 
-const SYNC_INTERVAL = 15 * 60 * 1000; // 15 minutes
+// Increased from 15 min — recipes/ratings change infrequently; serve from cache longer.
+const SYNC_INTERVAL = 60 * 60 * 1000; // 60 minutes
 const LAST_SYNC_KEY = 'recipehub:v1:last-sync-at';
 const DIRTY_KEY = 'recipehub:v1:dirty';
 
 let syncTimer: ReturnType<typeof setInterval> | null = null;
 let syncing = false;
 
-// --- Dirty flag: set whenever a local mutation happens ---
+// --- Dirty flag ---
 
 export function markDirty(): void {
   try {
@@ -54,8 +56,6 @@ function setLastSyncAt(): void {
     localStorage.setItem(LAST_SYNC_KEY, String(Date.now()));
   } catch {}
 }
-
-// --- Check if we should sync now ---
 
 function shouldSync(): boolean {
   if (!navigator.onLine) return false;
@@ -164,7 +164,7 @@ async function flushCommentOps(): Promise<void> {
   writeCommentQueue(remaining);
 }
 
-// --- Read pulls: refresh all caches from DB ---
+// --- Read pulls ---
 
 async function pullRecipes(): Promise<void> {
   try {
@@ -181,26 +181,41 @@ async function pullRecipes(): Promise<void> {
   } catch {}
 }
 
+// Server-side aggregation: one row per recipe instead of one row per rating.
+// Cuts egress by orders of magnitude as the ratings table grows.
 async function pullRatingStats(): Promise<void> {
   try {
     const { data, error } = await supabase
-      .from('recipe_ratings')
-      .select('recipe_id, rating');
+      .rpc('get_recipe_rating_stats');
     if (error) throw error;
 
-    const acc: Record<string, { total: number; count: number }> = {};
-    (data || []).forEach((r: any) => {
-      if (!acc[r.recipe_id]) acc[r.recipe_id] = { total: 0, count: 0 };
-      acc[r.recipe_id].total += r.rating;
-      acc[r.recipe_id].count += 1;
-    });
-
     const stats: Record<string, { average: number; count: number }> = {};
-    Object.entries(acc).forEach(([id, v]) => {
-      stats[id] = { average: v.count ? v.total / v.count : 0, count: v.count };
+    (data || []).forEach((r: any) => {
+      stats[r.recipe_id] = { average: Number(r.average_rating), count: Number(r.rating_count) };
     });
     cacheSet('rating-stats', stats);
-  } catch {}
+  } catch {
+    // Fall back to client-side aggregation if the RPC isn't available yet
+    try {
+      const { data } = await supabase
+        .from('recipe_ratings')
+        .select('recipe_id, rating');
+      if (!data) return;
+
+      const acc: Record<string, { total: number; count: number }> = {};
+      data.forEach((r: any) => {
+        if (!acc[r.recipe_id]) acc[r.recipe_id] = { total: 0, count: 0 };
+        acc[r.recipe_id].total += r.rating;
+        acc[r.recipe_id].count += 1;
+      });
+
+      const stats: Record<string, { average: number; count: number }> = {};
+      Object.entries(acc).forEach(([id, v]) => {
+        stats[id] = { average: v.count ? v.total / v.count : 0, count: v.count };
+      });
+      cacheSet('rating-stats', stats);
+    } catch {}
+  }
 }
 
 function isValidSunday(dateStr: string): boolean {
@@ -211,11 +226,15 @@ function isValidSunday(dateStr: string): boolean {
 
 async function pullMealPlans(): Promise<void> {
   try {
-    // Ensure week rows exist
     const targetWeeks = plannableWeekStarts();
+    const cutoff = cutoffWeekStart();
+
+    // Single query — reused for both cleanup logic and the final pull.
     const { data: existing } = await supabase
       .from('meal_plans')
-      .select('id, week_start_date');
+      .select('id, week_start_date')
+      .gte('week_start_date', cutoff);
+
     if (existing) {
       const have = new Set(existing.map((p: any) => p.week_start_date));
       const toCreate = targetWeeks.filter((w) => !have.has(w));
@@ -223,11 +242,7 @@ async function pullMealPlans(): Promise<void> {
         await supabase.from('meal_plans').insert(toCreate.map((w) => ({ week_start_date: w })));
       }
 
-      // Clean up: delete rows older than cutoff
-      const cutoff = cutoffWeekStart();
-      await supabase.from('meal_plans').delete().lt('week_start_date', cutoff);
-
-      // Clean up: delete rows whose week_start_date is not a valid Sunday
+      // Remove invalid-Sunday rows
       const badIds = existing
         .filter((p: any) => !isValidSunday(p.week_start_date))
         .map((p: any) => p.id);
@@ -235,7 +250,7 @@ async function pullMealPlans(): Promise<void> {
         await supabase.from('meal_plans').delete().in('id', badIds);
       }
 
-      // Clean up: deduplicate -- keep only one plan per week_start_date
+      // Remove duplicate rows (keep first per week)
       const byWeek = new Map<string, string[]>();
       for (const p of existing) {
         const ids = byWeek.get(p.week_start_date) || [];
@@ -244,26 +259,24 @@ async function pullMealPlans(): Promise<void> {
       }
       const dupIds: string[] = [];
       for (const ids of byWeek.values()) {
-        if (ids.length > 1) {
-          dupIds.push(...ids.slice(1));
-        }
+        if (ids.length > 1) dupIds.push(...ids.slice(1));
       }
       if (dupIds.length > 0) {
         await supabase.from('meal_plans').delete().in('id', dupIds);
       }
     }
 
-    // Pull plans + items
+    // Pull valid plans within the plannable window
     const { data: plans, error } = await supabase
       .from('meal_plans')
-      .select('*')
+      .select('id, week_start_date, created_at, user_id')
+      .gte('week_start_date', cutoff)
       .order('week_start_date', { ascending: true });
     if (error) throw error;
 
-    const cutoff = cutoffWeekStart();
     const seenWeeks = new Set<string>();
     const uniquePlans = (plans || [])
-      .filter((p: any) => p.week_start_date >= cutoff && isValidSunday(p.week_start_date))
+      .filter((p: any) => isValidSunday(p.week_start_date))
       .filter((p: any) => {
         if (seenWeeks.has(p.week_start_date)) return false;
         seenWeeks.add(p.week_start_date);
@@ -272,13 +285,17 @@ async function pullMealPlans(): Promise<void> {
 
     const planIds = uniquePlans.map((p: any) => p.id);
 
+    // Fetch meal plan items without embedding full recipe objects.
+    // Recipe data is already in the 'recipes' cache — join client-side.
     const { data: items } = await supabase
       .from('meal_plan_items')
-      .select('id, day_of_week, meal_plan_id, recipe_id, recipes(*)')
+      .select('id, day_of_week, meal_plan_id, recipe_id')
       .in('meal_plan_id', planIds);
 
-    // Deduplicate meal_plan_items: if the same recipe appears on the same day
-    // multiple times, keep only the first and delete the rest from the DB.
+    // Resolve recipe details from cache (no extra DB round-trip)
+    const cachedRecipes = cacheGet<any[]>('recipes') || [];
+    const recipeMap = new Map(cachedRecipes.map((r: any) => [r.id, r]));
+
     const dupItemIds: string[] = [];
     const grouped = uniquePlans.map((plan: any) => {
       const planItems = (items || []).filter((i: any) => i.meal_plan_id === plan.id);
@@ -289,17 +306,19 @@ async function pullMealPlans(): Promise<void> {
           const seen = new Set<string>();
           const deduped: any[] = [];
           for (const item of dayItems) {
-            const key = item.recipe_id;
-            if (seen.has(key)) {
+            if (seen.has(item.recipe_id)) {
               dupItemIds.push(item.id);
             } else {
-              seen.add(key);
+              seen.add(item.recipe_id);
               deduped.push(item);
             }
           }
           return {
             day_of_week: day,
-            entries: deduped.map((i: any) => ({ itemId: i.id, recipe: i.recipes })),
+            entries: deduped.map((i: any) => ({
+              itemId: i.id,
+              recipe: recipeMap.get(i.recipe_id) ?? { id: i.recipe_id, title: '' },
+            })),
           };
         });
       return { ...plan, items: groupedDays };
@@ -310,10 +329,7 @@ async function pullMealPlans(): Promise<void> {
     }
 
     cacheSet('meal-plans', grouped);
-    cacheSet(
-      'detail-meal-plans',
-      uniquePlans.map((p: any) => ({ id: p.id, week_start_date: p.week_start_date }))
-    );
+    cacheSet('detail-meal-plans', uniquePlans.map((p: any) => ({ id: p.id, week_start_date: p.week_start_date })));
     cacheSet('grocery-meal-plans', uniquePlans);
   } catch {}
 }
@@ -325,68 +341,41 @@ async function pullUserData(): Promise<void> {
     const uid = userData.user.id;
     cacheSet('auth-user', userData.user);
 
-    // User ratings
-    const { data: ratings } = await supabase
-      .from('recipe_ratings')
-      .select('id, rating, updated_at, recipe:recipes(id, title, type)')
-      .eq('user_id', uid)
-      .order('updated_at', { ascending: false });
-    if (ratings) cacheSet(`user-ratings:${uid}`, ratings);
+    // Run all three user queries in parallel — independent of each other
+    const [ratingsResult, commentsResult, userRecipesResult, favoritesResult] = await Promise.all([
+      supabase
+        .from('recipe_ratings')
+        .select('id, rating, updated_at, recipe:recipes(id, title, type)')
+        .eq('user_id', uid)
+        .order('updated_at', { ascending: false }),
+      supabase
+        .from('recipe_comments')
+        .select('id, content, created_at, recipe:recipes(id, title)')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('recipes')
+        .select('*')
+        .eq('user_id', uid)
+        .eq('is_user_recipe', true)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('recipe_favorites')
+        .select('recipe_id')
+        .eq('user_id', uid),
+    ]);
 
-    // User comments
-    const { data: comments } = await supabase
-      .from('recipe_comments')
-      .select('id, content, created_at, recipe:recipes(id, title)')
-      .eq('user_id', uid)
-      .order('created_at', { ascending: false });
-    if (comments) cacheSet(`user-comments:${uid}`, comments);
-
-    // User's own submitted recipes
-    const { data: userRecipes } = await supabase
-      .from('recipes')
-      .select('*')
-      .eq('user_id', uid)
-      .eq('is_user_recipe', true)
-      .order('created_at', { ascending: false });
-    if (userRecipes) cacheSet(`user-recipes:${uid}`, userRecipes);
+    if (ratingsResult.data) cacheSet(`user-ratings:${uid}`, ratingsResult.data);
+    if (commentsResult.data) cacheSet(`user-comments:${uid}`, commentsResult.data);
+    if (userRecipesResult.data) cacheSet(`user-recipes:${uid}`, userRecipesResult.data);
+    if (favoritesResult.data) {
+      cacheSet('favorites', favoritesResult.data.map((f: any) => f.recipe_id));
+    }
   } catch {}
 }
 
-async function pullComments(): Promise<void> {
-  // Pull comments for all recipes we have cached
-  try {
-    const { data, error } = await supabase
-      .from('recipe_comments')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-
-    const byRecipe: Record<string, any[]> = {};
-    (data || []).forEach((c: any) => {
-      if (!byRecipe[c.recipe_id]) byRecipe[c.recipe_id] = [];
-      byRecipe[c.recipe_id].push(c);
-    });
-    Object.entries(byRecipe).forEach(([recipeId, comments]) => {
-      cacheSet(`comments:${recipeId}`, comments);
-    });
-  } catch {}
-}
-
-async function pullFavorites(): Promise<void> {
-  try {
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) return;
-
-    const { data, error } = await supabase
-      .from('recipe_favorites')
-      .select('recipe_id')
-      .eq('user_id', userData.user.id);
-    if (error) throw error;
-
-    const ids = (data || []).map((f: any) => f.recipe_id);
-    cacheSet('favorites', ids);
-  } catch {}
-}
+// Comments are fetched on-demand when a recipe detail page is visited (see RecipeComments).
+// Removed from the sync cycle — was a full table scan every 15 minutes for all users.
 
 // --- Full sync cycle ---
 
@@ -396,19 +385,15 @@ export async function runSync(): Promise<void> {
 
   syncing = true;
   try {
-    // 1. Flush all write queues first
     await flushRatings();
     await flushMealPlanOps();
     await flushCommentOps();
 
-    // 2. Pull fresh data from DB
     await Promise.all([
       pullRecipes(),
       pullRatingStats(),
       pullMealPlans(),
       pullUserData(),
-      pullComments(),
-      pullFavorites(),
     ]);
 
     clearDirty();
@@ -420,7 +405,7 @@ export async function runSync(): Promise<void> {
   }
 }
 
-// Force a sync regardless of timer (used on first load and coming back online)
+// Force sync regardless of timer — used on app boot and coming back online.
 export async function forceSync(): Promise<void> {
   if (syncing || !navigator.onLine) return;
   syncing = true;
@@ -434,8 +419,6 @@ export async function forceSync(): Promise<void> {
       pullRatingStats(),
       pullMealPlans(),
       pullUserData(),
-      pullComments(),
-      pullFavorites(),
     ]);
 
     clearDirty();
@@ -445,7 +428,7 @@ export async function forceSync(): Promise<void> {
   }
 }
 
-// Sync only writes (no pull), used by user-action write paths for immediate flush attempts
+// Sync only writes — called immediately after user mutations.
 export async function flushWrites(): Promise<void> {
   if (syncing || !navigator.onLine) return;
   try {
@@ -456,7 +439,7 @@ export async function flushWrites(): Promise<void> {
   } catch {}
 }
 
-// --- Favorites ---
+// --- Favorites (queued for batching rather than immediate per-click calls) ---
 
 export async function toggleFavoriteRemote(recipeId: string, isFavorited: boolean): Promise<void> {
   try {
@@ -481,7 +464,6 @@ export async function toggleFavoriteRemote(recipeId: string, isFavorited: boolea
 // --- Lifecycle ---
 
 export function installSyncManager(): void {
-  // Initial sync on app boot
   if (navigator.onLine) {
     const elapsed = Date.now() - getLastSyncAt();
     if (elapsed >= SYNC_INTERVAL || isDirty()) {
@@ -489,12 +471,10 @@ export function installSyncManager(): void {
     }
   }
 
-  // Periodic timer
   syncTimer = setInterval(() => {
     void runSync();
   }, SYNC_INTERVAL);
 
-  // Sync when coming back online
   window.addEventListener('online', () => {
     void forceSync();
   });
