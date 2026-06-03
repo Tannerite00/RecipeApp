@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Mail, Lock, LogOut, Calendar, Check, X, MessageCircle, Trash2, Bug, Send, CheckCircle2, ChefHat, Pencil } from 'lucide-react';
+import { ArrowLeft, Mail, Lock, LogOut, Calendar, Check, X, MessageCircle, Trash2, Bug, Send, CheckCircle2, ChefHat, Pencil, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import type { Recipe } from '../lib/supabase';
@@ -186,6 +186,141 @@ function BugReportModal({ user, onClose }: BugReportModalProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Delete Account Modal
+// ---------------------------------------------------------------------------
+
+interface DeleteAccountModalProps {
+  user: User;
+  onClose: () => void;
+  onDeleted: () => void;
+}
+
+function DeleteAccountModal({ user, onClose, onDeleted }: DeleteAccountModalProps) {
+  const [confirmText, setConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const CONFIRM_PHRASE = 'delete my account';
+
+  function handleOverlayClick(e: React.MouseEvent) {
+    if (e.target === overlayRef.current) onClose();
+  }
+
+  async function handleDelete() {
+    if (confirmText.trim().toLowerCase() !== CONFIRM_PHRASE) return;
+    setError(null);
+    setDeleting(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-account`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+        }
+      );
+
+      const body = await res.json();
+      if (!res.ok) {
+        setError(body.error ?? 'Failed to delete account. Please try again.');
+        setDeleting(false);
+        return;
+      }
+
+      onDeleted();
+    } catch {
+      setError('An unexpected error occurred. Please try again.');
+      setDeleting(false);
+    }
+  }
+
+  const ready = confirmText.trim().toLowerCase() === CONFIRM_PHRASE;
+
+  return (
+    <div
+      ref={overlayRef}
+      onClick={handleOverlayClick}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-fade-in">
+        <div className="px-6 pt-6 pb-4 border-b border-gray-100 flex items-start gap-3">
+          <div className="bg-red-100 rounded-lg p-2 flex-shrink-0 mt-0.5">
+            <AlertTriangle className="w-5 h-5 text-red-600" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">Delete Account</h3>
+            <p className="text-sm text-gray-500 mt-0.5">This action cannot be undone</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="ml-auto text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 space-y-1.5">
+            <p className="text-sm font-semibold text-red-800">The following will be permanently deleted:</p>
+            <ul className="text-sm text-red-700 space-y-1 list-disc list-inside">
+              <li>Your account and login credentials</li>
+              <li>All ratings you've submitted</li>
+              <li>All comments you've posted</li>
+            </ul>
+            <p className="text-sm text-red-700 mt-2">
+              Recipes you've added will be kept in the collection but disassociated from your account.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Type <span className="font-mono font-semibold text-gray-900">delete my account</span> to confirm
+            </label>
+            <input
+              type="text"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="delete my account"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent transition"
+              autoFocus
+            />
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-2.5">
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={!ready || deleting}
+              className="flex-1 py-3 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium rounded-xl transition text-sm"
+            >
+              {deleting ? 'Deleting...' : 'Delete Account'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Account Page
 // ---------------------------------------------------------------------------
 
@@ -201,6 +336,7 @@ export function AccountPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [signInToast, setSignInToast] = useState(false);
   const [showBugReport, setShowBugReport] = useState(false);
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [userRatings, setUserRatings] = useState<
     { id: string; rating: number; updated_at: string; recipe: { id: string; title: string; type: string | null } | null }[]
   >([]);
@@ -310,6 +446,15 @@ export function AccountPage() {
     navigate('/');
   }
 
+  function handleAccountDeleted() {
+    // Clear all local caches then redirect to home
+    try {
+      const keys = Object.keys(localStorage).filter(k => k.startsWith('recipehub:'));
+      keys.forEach(k => localStorage.removeItem(k));
+    } catch {}
+    navigate('/', { replace: true });
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -335,6 +480,14 @@ export function AccountPage() {
 
       {showBugReport && user && (
         <BugReportModal user={user} onClose={() => setShowBugReport(false)} />
+      )}
+
+      {showDeleteAccount && user && (
+        <DeleteAccountModal
+          user={user}
+          onClose={() => setShowDeleteAccount(false)}
+          onDeleted={handleAccountDeleted}
+        />
       )}
 
       <div className="w-full max-w-2xl mx-auto">
@@ -528,7 +681,7 @@ export function AccountPage() {
         </div>
 
         {/* Report a Bug */}
-        <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8">
+        <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 mb-6">
           <div className="flex items-start gap-3">
             <div className="bg-gray-100 rounded-lg p-2 flex-shrink-0 mt-0.5">
               <Bug className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
@@ -544,6 +697,28 @@ export function AccountPage() {
               >
                 <Bug className="w-4 h-4" />
                 Report a Bug
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Delete Account */}
+        <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 border border-red-100">
+          <div className="flex items-start gap-3">
+            <div className="bg-red-100 rounded-lg p-2 flex-shrink-0 mt-0.5">
+              <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">Delete Account</h2>
+              <p className="text-sm text-gray-600 mb-4">
+                Permanently delete your account, ratings, and comments. Any recipes you've added will remain in the collection.
+              </p>
+              <button
+                onClick={() => setShowDeleteAccount(true)}
+                className="flex items-center gap-2 bg-white border border-red-300 text-red-600 hover:bg-red-50 font-medium px-5 py-2.5 rounded-lg transition text-sm"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Account
               </button>
             </div>
           </div>
