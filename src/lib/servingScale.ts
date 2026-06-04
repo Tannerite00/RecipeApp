@@ -75,8 +75,23 @@ export function scaleIngredient(ingredient: string, multiplier: number): string 
   const originalQty = parseFraction(rawQty);
   if (isNaN(originalQty) || originalQty === 0) return cleaned;
 
-  const scaled = originalQty * multiplier;
-  return `${toFriendlyFraction(scaled)}${rest}`;
+  const scaledStr = toFriendlyFraction(originalQty * multiplier);
+
+  // Scale the second number if rest starts with a range separator (e.g. "3/4 - 1 tsp")
+  const rangeRe = new RegExp(
+    `^(\\s*[-\u2013]\\s*)(\\d+\\s*[${FRACTION_CHARS}]|\\d+\\/\\d+|\\d+\\.\\d+|\\d+|[${FRACTION_CHARS}])(.*)$`
+  );
+  const rangeMatch = rest.match(rangeRe);
+  if (rangeMatch) {
+    const sep = rangeMatch[1];
+    const qty2 = parseFraction(rangeMatch[2].trim());
+    const remainder = rangeMatch[3];
+    if (!isNaN(qty2) && qty2 > 0) {
+      return `${scaledStr}${sep}${toFriendlyFraction(qty2 * multiplier)}${remainder}`;
+    }
+  }
+
+  return `${scaledStr}${rest}`;
 }
 
 export function parseServingCount(servings: string): number | null {
