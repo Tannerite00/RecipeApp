@@ -63,6 +63,16 @@ function toFriendlyFraction(n: number): string {
 export { toFriendlyFraction };
 
 export function scaleIngredient(ingredient: string, multiplier: number): string {
+  console.log('Ingredient:', ingredient);
+
+  const cleaned = ingredient.trim().replace(/<[^>]*>/g, '');
+
+  console.log('Cleaned:', cleaned);
+
+  const match = cleaned.match(LEADING_QTY_RE);
+
+  console.log('Match:', match);
+  
   const cleaned = ingredient.trim().replace(/<[^>]*>/g, '');
   if (multiplier === 1) return cleaned;
 
