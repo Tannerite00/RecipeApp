@@ -117,7 +117,7 @@ function BugReportModal({ user, onClose }: BugReportModalProps) {
             </div>
             <div>
               <h3 className="text-lg font-bold text-gray-900">Report a Bug</h3>
-              <p className="text-xs text-gray-500">Help us improve Bento</p>
+              <p className="text-xs text-gray-500">Help us improve Plantiful</p>
             </div>
           </div>
           <button

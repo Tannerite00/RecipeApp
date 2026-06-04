@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
   <rect width="192" height="192" rx="36" fill="#2dd4bf"/>
-  <text
-    x="96"
-    y="128"
-    font-family="Georgia, 'Times New Roman', serif"
-    font-size="120"
-    font-weight="bold"
-    font-style="italic"
-    fill="white"
-    text-anchor="middle"
-  >B</text>
+  <!-- plate shadow -->
+  <ellipse cx="96" cy="133" rx="60" ry="21" fill="white" opacity="0.3"/>
+  <!-- plate -->
+  <ellipse cx="96" cy="126" rx="60" ry="21" fill="white"/>
+  <!-- stem -->
+  <line x1="96" y1="116" x2="96" y2="60" stroke="#2dd4bf" stroke-width="11" stroke-linecap="round"/>
+  <!-- left leaf -->
+  <path d="M96 91 C74 78 52 84 52 66 C74 66 90 78 96 91Z" fill="white"/>
+  <!-- right leaf -->
+  <path d="M96 72 C118 59 140 65 140 47 C118 47 102 59 96 72Z" fill="white"/>
 </svg>

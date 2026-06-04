@@ -28,9 +28,15 @@ export function Navigation() {
         <div className="flex justify-between items-center h-14 sm:h-16 gap-2">
           <div className="flex items-center gap-2 cursor-pointer flex-shrink-0" onClick={() => navigate('/')}>
             <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#2dd4bf' }}>
-              <span className="text-white font-bold italic text-base sm:text-lg leading-none select-none">B</span>
+              <svg viewBox="0 0 32 32" className="w-5 h-5 sm:w-6 sm:h-6" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <ellipse cx="16" cy="22.5" rx="10" ry="3.5" fill="white" opacity="0.3"/>
+                <ellipse cx="16" cy="21" rx="10" ry="3.5" fill="white"/>
+                <line x1="16" y1="19" x2="16" y2="10" stroke="#2dd4bf" strokeWidth="2" strokeLinecap="round"/>
+                <path d="M16 15 C13 13 10 14 10 11 C13 11 15 13 16 15Z" fill="white"/>
+                <path d="M16 12 C19 10 22 11 22 8 C19 8 17 10 16 12Z" fill="white"/>
+              </svg>
             </div>
-            <span className="text-base sm:text-xl font-bold text-gray-900">Bento</span>
+            <span className="text-base sm:text-xl font-bold text-gray-900">Plantiful</span>
           </div>
 
           <div className="flex gap-0.5 sm:gap-1">

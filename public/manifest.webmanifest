@@ -1,6 +1,6 @@
 {
-  "name": "Bento",
-  "short_name": "Bento",
+  "name": "Plantiful",
+  "short_name": "Plantiful",
   "description": "Plan meals, browse recipes, and build grocery lists",
   "start_url": "/",
   "display": "standalone",
