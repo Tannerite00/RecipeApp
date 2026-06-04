@@ -133,7 +133,6 @@ export function MealPlanPage() {
     });
   }, []);
 
-  // Capture pending add from navigation state immediately (before loading completes)
   useEffect(() => {
     const state = location.state as {
       addRecipeToMealPlan?: boolean;
@@ -144,17 +143,20 @@ export function MealPlanPage() {
     } | null;
 
     if (state?.addRecipeToMealPlan && state.mealPlanId && state.recipeId != null && state.dayOfWeek != null) {
-      pendingAdd.current = {
-        mealPlanId: state.mealPlanId,
-        recipeId: state.recipeId,
-        dayOfWeek: state.dayOfWeek,
-        recipeTitle: state.recipeTitle ?? '',
-      };
       window.history.replaceState({}, '');
+      if (!loading) {
+        addRecipeToDay(state.mealPlanId, state.recipeId, state.dayOfWeek, state.recipeTitle ?? '');
+      } else {
+        pendingAdd.current = {
+          mealPlanId: state.mealPlanId,
+          recipeId: state.recipeId,
+          dayOfWeek: state.dayOfWeek,
+          recipeTitle: state.recipeTitle ?? '',
+        };
+      }
     }
   }, [location.state]);
 
-  // Apply pending add once loading is complete and mealPlans are populated
   useEffect(() => {
     if (loading) return;
     if (!pendingAdd.current) return;
