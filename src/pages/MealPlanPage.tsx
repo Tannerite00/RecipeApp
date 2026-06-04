@@ -5,7 +5,7 @@ import { type MealPlan, type Recipe } from '../lib/supabase';
 import { cutoffWeekStart, currentWeekStart, plannableWeekStarts } from '../lib/mealPlanWeeks';
 import { cacheGet, cacheSet, enqueueMealPlanOp, getServingOverrides, setServingOverride, removeServingOverride } from '../lib/offlineCache';
 import { markDirty, flushWrites, runSync } from '../lib/syncManager';
-import { parseServingCount } from '../lib/servingScale';
+import { parseServingCount, toFriendlyFraction } from '../lib/servingScale';
 
 interface MealPlanItemEntry {
   itemId: string;
@@ -384,6 +384,8 @@ export function MealPlanPage() {
                       {selectedPlan.items[idx]?.entries.map(({ itemId, recipe }) => {
                         const baseCount = parseServingCount(recipe.servings);
                         const currentServings = servingOverrides[itemId] ?? baseCount;
+                        const step = baseCount != null && baseCount < 1 ? baseCount : 1;
+                        const minServings = step;
 
                         return (
                           <div
@@ -410,23 +412,23 @@ export function MealPlanPage() {
                                       onMouseDown={(e) => e.stopPropagation()}
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        const next = (currentServings ?? baseCount) - 1;
-                                        if (next >= 1) handleServingChange(itemId, recipe, next);
+                                        const next = Math.round(((currentServings ?? baseCount!) - step) * 1000) / 1000;
+                                        if (next >= minServings) handleServingChange(itemId, recipe, next);
                                       }}
-                                      disabled={(currentServings ?? baseCount) <= 1}
+                                      disabled={(currentServings ?? baseCount!) <= minServings}
                                       className="w-5 h-5 flex items-center justify-center rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                                     >
                                       <Minus className="w-3 h-3" />
                                     </button>
                                     <span className="text-xs font-semibold text-gray-700 min-w-[1.25rem] text-center tabular-nums">
-                                      {currentServings ?? baseCount}
+                                      {toFriendlyFraction(currentServings ?? baseCount!)}
                                     </span>
                                     <button
                                       type="button"
                                       onMouseDown={(e) => e.stopPropagation()}
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        const next = (currentServings ?? baseCount) + 1;
+                                        const next = Math.round(((currentServings ?? baseCount!) + step) * 1000) / 1000;
                                         handleServingChange(itemId, recipe, next);
                                       }}
                                       className="w-5 h-5 flex items-center justify-center rounded border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors"

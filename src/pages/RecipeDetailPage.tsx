@@ -8,7 +8,7 @@ import { RecipeComments } from '../components/RecipeComments';
 import { currentWeekStart, getOfflineMealPlans } from '../lib/mealPlanWeeks';
 import { cacheGet, cacheSet, enqueueRating, enqueueMealPlanOp, setServingOverride, getServingOverrides, getFavorites, setFavorite, removeFavorite } from '../lib/offlineCache';
 import { markDirty, flushWrites, toggleFavoriteRemote } from '../lib/syncManager';
-import { parseServingCount, scaleIngredient } from '../lib/servingScale';
+import { parseServingCount, scaleIngredient, toFriendlyFraction } from '../lib/servingScale';
 
 export function RecipeDetailPage() {
   const { id } = useParams();
@@ -247,21 +247,23 @@ export function RecipeDetailPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      const next = (activeServings ?? baseServingCount) - 1;
-                      if (next >= 1) setChosenServings(next === baseServingCount ? null : next);
+                      const step = baseServingCount < 1 ? baseServingCount : 1;
+                      const next = Math.round(((activeServings ?? baseServingCount) - step) * 1000) / 1000;
+                      if (next >= step) setChosenServings(next === baseServingCount ? null : next);
                     }}
-                    disabled={(activeServings ?? baseServingCount) <= 1}
+                    disabled={(activeServings ?? baseServingCount) <= (baseServingCount < 1 ? baseServingCount : 1)}
                     className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-teal-200 bg-teal-50 text-teal-600 hover:bg-teal-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     <Minus className="w-3.5 h-3.5" />
                   </button>
                   <span className="text-base sm:text-lg font-bold text-gray-900 min-w-[2rem] text-center tabular-nums">
-                    {activeServings ?? baseServingCount}
+                    {toFriendlyFraction(activeServings ?? baseServingCount)}
                   </span>
                   <button
                     type="button"
                     onClick={() => {
-                      const next = (activeServings ?? baseServingCount) + 1;
+                      const step = baseServingCount < 1 ? baseServingCount : 1;
+                      const next = Math.round(((activeServings ?? baseServingCount) + step) * 1000) / 1000;
                       setChosenServings(next === baseServingCount ? null : next);
                     }}
                     className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-teal-200 bg-teal-50 text-teal-600 hover:bg-teal-100 transition-colors"
@@ -307,7 +309,7 @@ export function RecipeDetailPage() {
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Ingredients</h2>
               {servingMultiplier !== 1 && (
                 <span className="text-xs font-medium bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full">
-                  Adjusted for {activeServings} servings
+                  Adjusted for {toFriendlyFraction(activeServings!)} servings
                 </span>
               )}
             </div>

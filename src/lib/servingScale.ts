@@ -60,6 +60,8 @@ function toFriendlyFraction(n: number): string {
   return rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
 }
 
+export { toFriendlyFraction };
+
 export function scaleIngredient(ingredient: string, multiplier: number): string {
   const cleaned = ingredient.trim().replace(/<[^>]*>/g, '');
   if (multiplier === 1) return cleaned;
@@ -110,6 +112,14 @@ export function parseServingCount(servings: string): number | null {
 
   const rangeMatch = s.match(/(\d+)\s*[-–]\s*(\d+)/);
   if (rangeMatch) return parseInt(rangeMatch[1]);
+
+  // Fractional quantities like "about 1/2 cup" or "makes ½ batch"
+  const fracRe = new RegExp(`(\\d+\\s*[${FRACTION_CHARS}]|\\d+\\/\\d+|[${FRACTION_CHARS}])`);
+  const fracMatch = s.match(fracRe);
+  if (fracMatch) {
+    const val = parseFraction(fracMatch[1]);
+    if (!isNaN(val) && val > 0) return val;
+  }
 
   const anyNum = s.match(/(\d+)/);
   if (anyNum) return parseInt(anyNum[1]);
