@@ -63,24 +63,24 @@ function toFriendlyFraction(n: number): string {
 export { toFriendlyFraction };
 
 export function scaleIngredient(ingredient: string, multiplier: number): string {
-const fullRangeRe = new RegExp(
-  `^\\s*` +
-  `(\\d+\\s*[${FRACTION_CHARS}]|\\d+\\/\\d+|\\d+\\.\\d+|\\d+|[${FRACTION_CHARS}])` +
-  `(\\s*[-\\u2013]\\s*|\\s+to\\s+)` +
-  `(\\d+\\s*[${FRACTION_CHARS}]|\\d+\\/\\d+|\\d+\\.\\d+|\\d+|[${FRACTION_CHARS}])` +
-  `(.*)$`
-);
-
-const fullRangeMatch = cleaned.match(fullRangeRe);
-
-if (fullRangeMatch) {
-  const qty1 = parseFraction(fullRangeMatch[1]);
-  const sep = fullRangeMatch[2];
-  const qty2 = parseFraction(fullRangeMatch[3]);
-  const remainder = fullRangeMatch[4];
-
-  return `${toFriendlyFraction(qty1 * multiplier)}${sep}${toFriendlyFraction(qty2 * multiplier)}${remainder}`;
-}
+  const fullRangeRe = new RegExp(
+    `^\\s*` +
+    `(\\d+\\s*[${FRACTION_CHARS}]|\\d+\\/\\d+|\\d+\\.\\d+|\\d+|[${FRACTION_CHARS}])` +
+    `(\\s*[-\\u2013]\\s*|\\s+to\\s+)` +
+    `(\\d+\\s*[${FRACTION_CHARS}]|\\d+\\/\\d+|\\d+\\.\\d+|\\d+|[${FRACTION_CHARS}])` +
+    `(.*)$`
+  );
+  
+  const fullRangeMatch = cleaned.match(fullRangeRe);
+  
+  if (fullRangeMatch) {
+    const qty1 = parseFraction(fullRangeMatch[1]);
+    const sep = fullRangeMatch[2];
+    const qty2 = parseFraction(fullRangeMatch[3]);
+    const remainder = fullRangeMatch[4];
+  
+    return `${toFriendlyFraction(qty1 * multiplier)}${sep}${toFriendlyFraction(qty2 * multiplier)}${remainder}`;
+  }
   
   const cleaned = ingredient.trim().replace(/<[^>]*>/g, '');
   if (multiplier === 1) return cleaned;
