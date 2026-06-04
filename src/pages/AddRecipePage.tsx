@@ -101,27 +101,23 @@ export function AddRecipePage() {
 
     const newRecipe = data as Recipe;
 
-    // Append to global recipes cache (incremental — avoids re-fetching entire list)
-    const cached = cacheGet<Recipe[]>('recipes') ?? [];
-    cacheSet('recipes', [...cached, newRecipe]);
-
-    // Append to user's own recipes cache
+    // Only add to user's own recipes cache (not global collection)
     const userCacheKey = `user-recipes:${cachedUser.id}`;
     const cachedUserRecipes = cacheGet<Recipe[]>(userCacheKey) ?? [];
     cacheSet(userCacheKey, [newRecipe, ...cachedUserRecipes]);
 
-    navigate(`/recipe/${data.id}`);
+    navigate('/my-recipes');
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 to-cyan-50 py-6 sm:py-8">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/my-recipes')}
           className="flex items-center gap-2 text-teal-600 hover:text-teal-700 mb-4 sm:mb-6 font-medium text-sm sm:text-base"
         >
           <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-          Back to Recipes
+          Back to My Recipes
         </button>
 
         <div className="bg-white rounded-lg shadow-lg p-5 sm:p-8 mb-6">

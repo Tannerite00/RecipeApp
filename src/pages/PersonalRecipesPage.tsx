@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, X, ArrowLeft, SlidersHorizontal, Heart, ChevronDown, PlusCircle } from 'lucide-react';
+import { Search, X, ArrowLeft, SlidersHorizontal, Heart, ChevronDown, Send, CheckCircle } from 'lucide-react';
 import { type Recipe } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { parseISO8601Duration, formatRecipeType, durationToMinutes } from '../lib/utils';
 import { StarRating } from '../components/StarRating';
-import { cacheGet, cacheSet, loadBundledRecipes, getFavorites, setFavorite, removeFavorite } from '../lib/offlineCache';
+import { cacheGet, cacheSet, getFavorites, setFavorite, removeFavorite } from '../lib/offlineCache';
 import { toggleFavoriteRemote } from '../lib/syncManager';
 
 interface MealPlanPickState {
@@ -80,9 +81,7 @@ function FilterSection({ title, isOpen, onToggle, children }: {
         <span className="text-sm font-semibold text-gray-900">{title}</span>
         <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
-      <div
-        className={`overflow-hidden transition-all duration-200 ${isOpen ? 'max-h-[50vh] opacity-100' : 'max-h-0 opacity-0'}`}
-      >
+      <div className={`overflow-hidden transition-all duration-200 ${isOpen ? 'max-h-[50vh] opacity-100' : 'max-h-0 opacity-0'}`}>
         <div className="px-5 pb-4">
           {children}
         </div>
@@ -91,7 +90,7 @@ function FilterSection({ title, isOpen, onToggle, children }: {
   );
 }
 
-export function RecipeListPage() {
+export function PersonalRecipesPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -101,11 +100,8 @@ export function RecipeListPage() {
   const [searchMode, setSearchMode] = useState<'name' | 'ingredients'>('name');
   const [loading, setLoading] = useState(true);
   const [recipeTypes, setRecipeTypes] = useState<string[]>([]);
-  const [ratingStats, setRatingStats] = useState<Record<string, { average: number; count: number }>>({});
-  const [selectedAllergens, setSelectedAllergens] = useState<Set<string>>(() => {
-    const cached = cacheGet<string[]>('allergen-filters');
-    return cached ? new Set(cached) : new Set();
-  });
+  const [ratingStats] = useState<Record<string, { average: number; count: number }>>({});
+  const [selectedAllergens, setSelectedAllergens] = useState<Set<string>>(new Set());
   const [sortOption, setSortOption] = useState<SortOption>('default');
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [openSections, setOpenSections] = useState({ types: true, allergens: false, sort: false });
@@ -113,6 +109,13 @@ export function RecipeListPage() {
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
+
+  // Submit to Plantiful
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [selectedSubmitId, setSelectedSubmitId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const submitModalRef = useRef<HTMLDivElement>(null);
 
   const pickState = (location.state as MealPlanPickState | null)?.pickRecipeForMealPlan
     ? (location.state as MealPlanPickState)
@@ -124,40 +127,46 @@ export function RecipeListPage() {
     (sortOption !== 'default' ? 1 : 0);
 
   useEffect(() => {
-    loadFromCache();
+    loadPersonalRecipes();
   }, []);
 
-  async function loadFromCache() {
-    const cached = cacheGet<Recipe[]>('recipes');
-    const cachedStats = cacheGet<Record<string, { average: number; count: number }>>('rating-stats');
+  async function loadPersonalRecipes() {
     const cachedUser = cacheGet<{ id: string }>('auth-user');
+    if (!cachedUser?.id) {
+      setLoading(false);
+      return;
+    }
+    setCurrentUserId(cachedUser.id);
 
-    if (cachedStats) setRatingStats(cachedStats);
-    if (cachedUser?.id) setCurrentUserId(cachedUser.id);
-
-    if (cached && cached.length) {
+    const userCacheKey = `user-recipes:${cachedUser.id}`;
+    const cached = cacheGet<Recipe[]>(userCacheKey);
+    if (cached) {
       setRecipes(cached);
       setFilteredRecipes(cached);
-      setRecipeTypes(
-        Array.from(new Set(cached.map((r) => r.type).filter(Boolean))).sort()
-      );
+      setRecipeTypes(Array.from(new Set(cached.map((r) => r.type).filter(Boolean))).sort());
       setLoading(false);
       return;
     }
 
-    const bundled = await loadBundledRecipes();
-    if (bundled && bundled.length) {
-      setRecipes(bundled as Recipe[]);
-      setFilteredRecipes(bundled as Recipe[]);
-      setRecipeTypes(
-        Array.from(new Set((bundled as Recipe[]).map((r) => r.type).filter(Boolean))).sort()
-      );
+    const { data } = await supabase
+      .from('recipes')
+      .select('*')
+      .eq('is_user_recipe', true)
+      .eq('user_id', cachedUser.id)
+      .order('created_at', { ascending: false });
+
+    if (data && data.length) {
+      const recipes = data as Recipe[];
+      cacheSet(userCacheKey, recipes);
+      setRecipes(recipes);
+      setFilteredRecipes(recipes);
+      setRecipeTypes(Array.from(new Set(recipes.map((r) => r.type).filter(Boolean))).sort());
     }
     setLoading(false);
   }
 
   useEffect(() => {
-    let filtered = recipes.filter((r) => !r.is_user_recipe);
+    let filtered = recipes;
 
     if (showFavoritesOnly) {
       filtered = filtered.filter((r) => favorites.has(r.id));
@@ -177,17 +186,13 @@ export function RecipeListPage() {
     if (searchQuery.trim() !== '') {
       const query = searchQuery.toLowerCase();
       if (searchMode === 'name') {
-        filtered = filtered.filter(recipe =>
-          recipe.title.toLowerCase().includes(query)
-        );
+        filtered = filtered.filter(recipe => recipe.title.toLowerCase().includes(query));
       } else {
         const searchTerms = query.split(',').map(term => term.trim()).filter(Boolean);
         if (searchTerms.length > 0) {
           filtered = filtered.filter(recipe =>
             searchTerms.every(term =>
-              recipe.ingredients.some(ingredient =>
-                ingredient.toLowerCase().includes(term)
-              )
+              recipe.ingredients.some(ingredient => ingredient.toLowerCase().includes(term))
             )
           );
         }
@@ -197,30 +202,14 @@ export function RecipeListPage() {
     if (sortOption !== 'default') {
       filtered = [...filtered];
       switch (sortOption) {
-        case 'alpha_asc':
-          filtered.sort((a, b) => a.title.localeCompare(b.title));
-          break;
-        case 'alpha_desc':
-          filtered.sort((a, b) => b.title.localeCompare(a.title));
-          break;
-        case 'prep_asc':
-          filtered.sort((a, b) => durationToMinutes(a.prep_time) - durationToMinutes(b.prep_time));
-          break;
-        case 'prep_desc':
-          filtered.sort((a, b) => durationToMinutes(b.prep_time) - durationToMinutes(a.prep_time));
-          break;
-        case 'cook_asc':
-          filtered.sort((a, b) => durationToMinutes(a.cook_time) - durationToMinutes(b.cook_time));
-          break;
-        case 'cook_desc':
-          filtered.sort((a, b) => durationToMinutes(b.cook_time) - durationToMinutes(a.cook_time));
-          break;
+        case 'alpha_asc': filtered.sort((a, b) => a.title.localeCompare(b.title)); break;
+        case 'alpha_desc': filtered.sort((a, b) => b.title.localeCompare(a.title)); break;
+        case 'prep_asc': filtered.sort((a, b) => durationToMinutes(a.prep_time) - durationToMinutes(b.prep_time)); break;
+        case 'prep_desc': filtered.sort((a, b) => durationToMinutes(b.prep_time) - durationToMinutes(a.prep_time)); break;
+        case 'cook_asc': filtered.sort((a, b) => durationToMinutes(a.cook_time) - durationToMinutes(b.cook_time)); break;
+        case 'cook_desc': filtered.sort((a, b) => durationToMinutes(b.cook_time) - durationToMinutes(a.cook_time)); break;
         case 'rating_desc':
-          filtered.sort((a, b) => {
-            const ra = ratingStats[a.id]?.average ?? 0;
-            const rb = ratingStats[b.id]?.average ?? 0;
-            return rb - ra;
-          });
+          filtered.sort((a, b) => (ratingStats[b.id]?.average ?? 0) - (ratingStats[a.id]?.average ?? 0));
           break;
       }
     }
@@ -233,7 +222,6 @@ export function RecipeListPage() {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
-      cacheSet('allergen-filters', Array.from(next));
       return next;
     });
   }
@@ -242,7 +230,6 @@ export function RecipeListPage() {
     setSelectedType('');
     setSelectedAllergens(new Set());
     setSortOption('default');
-    cacheSet('allergen-filters', []);
   }
 
   function toggleSection(section: keyof typeof openSections) {
@@ -252,15 +239,10 @@ export function RecipeListPage() {
   function handleToggleFavorite(e: React.MouseEvent, recipeId: string) {
     e.stopPropagation();
     const isFav = favorites.has(recipeId);
-    if (isFav) {
-      removeFavorite(recipeId);
-    } else {
-      setFavorite(recipeId);
-    }
+    if (isFav) removeFavorite(recipeId);
+    else setFavorite(recipeId);
     setFavoritesState(getFavorites());
-    if (currentUserId) {
-      void toggleFavoriteRemote(recipeId, !isFav);
-    }
+    if (currentUserId) void toggleFavoriteRemote(recipeId, !isFav);
   }
 
   useEffect(() => {
@@ -273,6 +255,17 @@ export function RecipeListPage() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showFilterModal]);
+
+  useEffect(() => {
+    if (!showSubmitModal) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (submitModalRef.current && !submitModalRef.current.contains(e.target as Node)) {
+        setShowSubmitModal(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showSubmitModal]);
 
   function handleRecipeClick(recipe: Recipe) {
     if (pickState) {
@@ -293,6 +286,53 @@ export function RecipeListPage() {
   function formatWeekLabel(weekStart: string): string {
     const [y, m, d] = weekStart.split('-').map(Number);
     return new Date(y, m - 1, d).toLocaleDateString();
+  }
+
+  async function handleSubmitToPlantiful() {
+    if (!selectedSubmitId) return;
+    setSubmitting(true);
+    setSubmitError(null);
+
+    const { error } = await supabase
+      .from('recipes')
+      .update({ submitted_for_review: true })
+      .eq('id', selectedSubmitId);
+
+    setSubmitting(false);
+
+    if (error) {
+      setSubmitError('Submission failed. Please try again.');
+      return;
+    }
+
+    const updated = (r: Recipe) => r.id === selectedSubmitId ? { ...r, submitted_for_review: true } : r;
+    setRecipes(prev => prev.map(updated));
+    if (currentUserId) {
+      const key = `user-recipes:${currentUserId}`;
+      const cached = cacheGet<Recipe[]>(key) ?? [];
+      cacheSet(key, cached.map(updated));
+    }
+    setShowSubmitModal(false);
+    setSelectedSubmitId(null);
+  }
+
+  const unsubmittedRecipes = recipes.filter(r => !r.submitted_for_review);
+
+  if (!currentUserId && !loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-teal-50 to-cyan-50 flex items-center justify-center p-6">
+        <div className="bg-white rounded-xl shadow-lg p-8 max-w-sm w-full text-center">
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Sign in required</h2>
+          <p className="text-gray-600 text-sm mb-6">Create an account or log in to save and manage your personal recipes.</p>
+          <button
+            onClick={() => navigate('/auth')}
+            className="w-full bg-teal-600 hover:bg-teal-700 text-white font-medium py-2.5 rounded-lg transition-colors"
+          >
+            Sign In
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -321,16 +361,20 @@ export function RecipeListPage() {
 
         <div className="mb-6 sm:mb-8 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2">Recipe Collection</h1>
-            <p className="text-sm sm:text-base text-gray-600">Browse and discover delicious recipes</p>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2">Personal Recipes</h1>
+            <p className="text-sm sm:text-base text-gray-600">Your saved recipes, ready to share with Plantiful</p>
           </div>
           <button
-            onClick={() => navigate('/add-recipe')}
+            onClick={() => {
+              setSelectedSubmitId(null);
+              setSubmitError(null);
+              setShowSubmitModal(true);
+            }}
             className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2.5 rounded-lg font-medium transition text-sm sm:text-base flex-shrink-0 shadow-sm"
           >
-            <PlusCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="hidden sm:inline">Add Recipe</span>
-            <span className="sm:hidden">Add</span>
+            <Send className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="hidden sm:inline">Submit to Plantiful</span>
+            <span className="sm:hidden">Submit</span>
           </button>
         </div>
 
@@ -339,21 +383,13 @@ export function RecipeListPage() {
             <div className="inline-flex rounded-lg border border-gray-300 bg-white">
               <button
                 onClick={() => setSearchMode('name')}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${
-                  searchMode === 'name'
-                    ? 'bg-teal-500 text-white'
-                    : 'text-gray-700 hover:bg-gray-50'
-                }`}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${searchMode === 'name' ? 'bg-teal-500 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
               >
                 By Name
               </button>
               <button
                 onClick={() => setSearchMode('ingredients')}
-                className={`px-4 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
-                  searchMode === 'ingredients'
-                    ? 'bg-teal-500 text-white'
-                    : 'text-gray-700 hover:bg-gray-50'
-                }`}
+                className={`px-4 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${searchMode === 'ingredients' ? 'bg-teal-500 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
               >
                 By Ingredients
               </button>
@@ -362,9 +398,7 @@ export function RecipeListPage() {
             <button
               onClick={() => setShowFilterModal(true)}
               className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
-                activeFilterCount > 0
-                  ? 'bg-teal-50 border-teal-300 text-teal-700 hover:bg-teal-100'
-                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                activeFilterCount > 0 ? 'bg-teal-50 border-teal-300 text-teal-700 hover:bg-teal-100' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
               }`}
             >
               <SlidersHorizontal className="w-4 h-4" />
@@ -377,17 +411,9 @@ export function RecipeListPage() {
             </button>
 
             <button
-              onClick={() => {
-                if (!currentUserId && !showFavoritesOnly) {
-                  navigate('/auth');
-                  return;
-                }
-                setShowFavoritesOnly(!showFavoritesOnly);
-              }}
+              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
               className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
-                showFavoritesOnly
-                  ? 'bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100'
-                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                showFavoritesOnly ? 'bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
               }`}
             >
               <Heart className={`w-4 h-4 ${showFavoritesOnly ? 'fill-rose-500' : ''}`} />
@@ -399,7 +425,7 @@ export function RecipeListPage() {
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
-              placeholder={searchMode === 'name' ? 'Search recipes by name...' : 'Search by ingredient... (comma separate for multiple ingredients)'}
+              placeholder={searchMode === 'name' ? 'Search recipes by name...' : 'Search by ingredient... (comma separate for multiple)'}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
@@ -416,10 +442,7 @@ export function RecipeListPage() {
                 </span>
               )}
               {ALLERGENS.filter((a) => selectedAllergens.has(a.key)).map((a) => (
-                <span
-                  key={a.key}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 border border-red-200 text-red-700 rounded-full text-xs font-medium"
-                >
+                <span key={a.key} className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 border border-red-200 text-red-700 rounded-full text-xs font-medium">
                   {a.label.split(' (')[0]}
                   <button onClick={() => toggleAllergen(a.key)} className="hover:text-red-900"><X className="w-3 h-3" /></button>
                 </span>
@@ -430,19 +453,14 @@ export function RecipeListPage() {
                   <button onClick={() => setSortOption('default')} className="hover:text-blue-900"><X className="w-3 h-3" /></button>
                 </span>
               )}
-              <button
-                onClick={clearAllFilters}
-                className="text-xs text-gray-500 hover:text-gray-700 font-medium underline ml-1"
-              >
-                Clear all
-              </button>
+              <button onClick={clearAllFilters} className="text-xs text-gray-500 hover:text-gray-700 font-medium underline ml-1">Clear all</button>
             </div>
           )}
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center min-h-[400px]">
-            <div className="text-gray-500">Loading recipes...</div>
+            <div className="text-gray-500">Loading your recipes...</div>
           </div>
         ) : filteredRecipes.length === 0 ? (
           <div className="flex items-center justify-center min-h-[400px]">
@@ -452,13 +470,18 @@ export function RecipeListPage() {
                   ? 'No favorites yet. Heart some recipes to see them here!'
                   : searchQuery || activeFilterCount > 0
                     ? 'No recipes found matching your filters'
-                    : 'No recipes available'}
+                    : "You haven't added any personal recipes yet."}
               </p>
-              {showFavoritesOnly && (
+              {recipes.length === 0 && (
                 <button
-                  onClick={() => setShowFavoritesOnly(false)}
-                  className="mt-3 text-sm text-teal-600 hover:text-teal-700 font-medium"
+                  onClick={() => navigate('/add-recipe')}
+                  className="mt-4 text-sm text-teal-600 hover:text-teal-700 font-medium"
                 >
+                  Add your first recipe
+                </button>
+              )}
+              {showFavoritesOnly && (
+                <button onClick={() => setShowFavoritesOnly(false)} className="mt-3 text-sm text-teal-600 hover:text-teal-700 font-medium">
                   Show all recipes
                 </button>
               )}
@@ -474,6 +497,12 @@ export function RecipeListPage() {
                   pickState ? 'ring-2 ring-transparent hover:ring-blue-400' : ''
                 }`}
               >
+                {recipe.submitted_for_review && (
+                  <div className="absolute top-3 left-3 sm:top-4 sm:left-4 flex items-center gap-1 bg-teal-50 border border-teal-200 text-teal-700 rounded-full px-2 py-0.5 text-xs font-medium">
+                    <CheckCircle className="w-3 h-3" />
+                    Submitted
+                  </div>
+                )}
                 <button
                   onClick={(e) => handleToggleFavorite(e, recipe.id)}
                   className={`absolute top-3 right-3 sm:top-4 sm:right-4 p-1.5 rounded-full transition-all duration-200 ${
@@ -486,7 +515,9 @@ export function RecipeListPage() {
                   <Heart className={`w-5 h-5 ${favorites.has(recipe.id) ? 'fill-rose-500' : ''}`} />
                 </button>
 
-                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 line-clamp-2 pr-8">{recipe.title}</h3>
+                <h3 className={`text-lg sm:text-xl font-bold text-gray-900 mb-2 line-clamp-2 pr-8 ${recipe.submitted_for_review ? 'mt-6' : ''}`}>
+                  {recipe.title}
+                </h3>
                 <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">{formatRecipeType(recipe.type)}</p>
                 <div className="flex flex-wrap gap-3 sm:gap-4 text-xs sm:text-sm text-gray-700 items-center">
                   <div>
@@ -512,12 +543,10 @@ export function RecipeListPage() {
         )}
       </div>
 
+      {/* Filter modal */}
       {showFilterModal && (
         <>
-          <div
-            className="fixed inset-0 bg-black/40 z-40"
-            onClick={() => setShowFilterModal(false)}
-          />
+          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowFilterModal(false)} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
             <div
               ref={modalRef}
@@ -531,17 +560,9 @@ export function RecipeListPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   {activeFilterCount > 0 && (
-                    <button
-                      onClick={clearAllFilters}
-                      className="text-xs text-teal-600 hover:text-teal-700 font-medium"
-                    >
-                      Clear all
-                    </button>
+                    <button onClick={clearAllFilters} className="text-xs text-teal-600 hover:text-teal-700 font-medium">Clear all</button>
                   )}
-                  <button
-                    onClick={() => setShowFilterModal(false)}
-                    className="text-gray-400 hover:text-gray-600 transition-colors"
-                  >
+                  <button onClick={() => setShowFilterModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
@@ -554,34 +575,13 @@ export function RecipeListPage() {
                   onToggle={() => toggleSection('types')}
                 >
                   <div className="space-y-1">
-                    <label
-                      className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors ${
-                        !selectedType ? 'bg-teal-50 text-teal-700' : 'hover:bg-gray-50'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="recipeType"
-                        checked={!selectedType}
-                        onChange={() => setSelectedType('')}
-                        className="w-4 h-4 text-teal-600 focus:ring-teal-500"
-                      />
+                    <label className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors ${!selectedType ? 'bg-teal-50 text-teal-700' : 'hover:bg-gray-50'}`}>
+                      <input type="radio" name="recipeType" checked={!selectedType} onChange={() => setSelectedType('')} className="w-4 h-4 text-teal-600 focus:ring-teal-500" />
                       <span className="text-sm">All Types</span>
                     </label>
                     {recipeTypes.map((type) => (
-                      <label
-                        key={type}
-                        className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors ${
-                          selectedType === type ? 'bg-teal-50 text-teal-700' : 'hover:bg-gray-50'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="recipeType"
-                          checked={selectedType === type}
-                          onChange={() => setSelectedType(type)}
-                          className="w-4 h-4 text-teal-600 focus:ring-teal-500"
-                        />
+                      <label key={type} className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors ${selectedType === type ? 'bg-teal-50 text-teal-700' : 'hover:bg-gray-50'}`}>
+                        <input type="radio" name="recipeType" checked={selectedType === type} onChange={() => setSelectedType(type)} className="w-4 h-4 text-teal-600 focus:ring-teal-500" />
                         <span className="text-sm">{formatRecipeType(type)}</span>
                       </label>
                     ))}
@@ -596,16 +596,8 @@ export function RecipeListPage() {
                   <p className="text-xs text-gray-500 mb-2">Check allergens to hide recipes containing them.</p>
                   <div className="space-y-0.5 max-h-[30vh] overflow-y-auto">
                     {ALLERGENS.map((allergen) => (
-                      <label
-                        key={allergen.key}
-                        className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedAllergens.has(allergen.key)}
-                          onChange={() => toggleAllergen(allergen.key)}
-                          className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 flex-shrink-0"
-                        />
+                      <label key={allergen.key} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                        <input type="checkbox" checked={selectedAllergens.has(allergen.key)} onChange={() => toggleAllergen(allergen.key)} className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 flex-shrink-0" />
                         <span className="text-sm text-gray-800">{allergen.label}</span>
                       </label>
                     ))}
@@ -619,19 +611,8 @@ export function RecipeListPage() {
                 >
                   <div className="space-y-1">
                     {SORT_OPTIONS.map((option) => (
-                      <label
-                        key={option.value}
-                        className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors ${
-                          sortOption === option.value ? 'bg-teal-50 text-teal-700' : 'hover:bg-gray-50'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="sortOption"
-                          checked={sortOption === option.value}
-                          onChange={() => setSortOption(option.value)}
-                          className="w-4 h-4 text-teal-600 focus:ring-teal-500"
-                        />
+                      <label key={option.value} className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-colors ${sortOption === option.value ? 'bg-teal-50 text-teal-700' : 'hover:bg-gray-50'}`}>
+                        <input type="radio" name="sortOption" checked={sortOption === option.value} onChange={() => setSortOption(option.value)} className="w-4 h-4 text-teal-600 focus:ring-teal-500" />
                         <span className="text-sm">{option.label}</span>
                       </label>
                     ))}
@@ -640,13 +621,94 @@ export function RecipeListPage() {
               </div>
 
               <div className="px-5 py-4 border-t border-gray-200 flex-shrink-0">
-                <button
-                  onClick={() => setShowFilterModal(false)}
-                  className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors text-sm"
-                >
+                <button onClick={() => setShowFilterModal(false)} className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors text-sm">
                   Show Results
                 </button>
               </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Submit to Plantiful modal */}
+      {showSubmitModal && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowSubmitModal(false)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
+            <div
+              ref={submitModalRef}
+              className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-md flex flex-col pointer-events-auto"
+              style={{ animation: 'fadeSlideIn 0.15s ease-out' }}
+            >
+              <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <Send className="w-5 h-5 text-teal-600" />
+                  <h3 className="font-bold text-gray-900">Submit to Plantiful</h3>
+                </div>
+                <button onClick={() => setShowSubmitModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="px-5 py-4">
+                <p className="text-sm text-gray-600 mb-4">
+                  Select one of your recipes to submit for review. If approved, it will be added to the Plantiful recipe collection for everyone to enjoy.
+                </p>
+
+                {unsubmittedRecipes.length === 0 ? (
+                  <div className="text-center py-6">
+                    <CheckCircle className="w-10 h-10 text-teal-500 mx-auto mb-2" />
+                    <p className="text-sm font-medium text-gray-700">All your recipes have been submitted!</p>
+                    <p className="text-xs text-gray-500 mt-1">Our team will review them soon.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {unsubmittedRecipes.map((recipe) => (
+                      <label
+                        key={recipe.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                          selectedSubmitId === recipe.id
+                            ? 'bg-teal-50 border-teal-300'
+                            : 'bg-gray-50 border-gray-200 hover:border-teal-200 hover:bg-teal-50/50'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="submitRecipe"
+                          checked={selectedSubmitId === recipe.id}
+                          onChange={() => setSelectedSubmitId(recipe.id)}
+                          className="w-4 h-4 text-teal-600 focus:ring-teal-500 flex-shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{recipe.title}</p>
+                          {recipe.type && <p className="text-xs text-gray-500">{formatRecipeType(recipe.type)}</p>}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                {submitError && <p className="mt-3 text-sm text-red-600">{submitError}</p>}
+              </div>
+
+              {unsubmittedRecipes.length > 0 && (
+                <div className="px-5 py-4 border-t border-gray-200 flex gap-3">
+                  <button
+                    onClick={() => setShowSubmitModal(false)}
+                    className="flex-1 py-2.5 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSubmitToPlantiful}
+                    disabled={!selectedSubmitId || submitting}
+                    className="flex-1 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
+                  >
+                    <Send className="w-4 h-4" />
+                    {submitting ? 'Submitting...' : 'Submit for Review'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </>

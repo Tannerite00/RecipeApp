@@ -72,6 +72,17 @@ export function Navigation() {
               <span className="sm:hidden">Grocery</span>
               <span className="hidden sm:inline">Grocery List</span>
             </button>
+            <button
+              onClick={() => navigate('/my-recipes')}
+              className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-base font-medium transition ${
+                isActive('/my-recipes')
+                  ? 'bg-teal-100 text-teal-700'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <span className="sm:hidden">Mine</span>
+              <span className="hidden sm:inline">My Recipes</span>
+            </button>
             {loggedIn ? (
               <button
                 onClick={() => navigate('/account')}

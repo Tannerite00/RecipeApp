@@ -8,6 +8,7 @@ import { GroceryListPage } from './pages/GroceryListPage';
 import { AuthPage } from './pages/AuthPage';
 import { AccountPage } from './pages/AccountPage';
 import { EditRecipePage } from './pages/EditRecipePage';
+import { PersonalRecipesPage } from './pages/PersonalRecipesPage';
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
           <Route path="/" element={<RecipeListPage />} />
           <Route path="/recipe/:id" element={<RecipeDetailPage />} />
           <Route path="/add-recipe" element={<AddRecipePage />} />
+          <Route path="/my-recipes" element={<PersonalRecipesPage />} />
           <Route path="/meal-plans" element={<MealPlanPage />} />
           <Route path="/grocery-list" element={<GroceryListPage />} />
           <Route path="/auth" element={<AuthPage />} />
