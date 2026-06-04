@@ -63,17 +63,12 @@ function toFriendlyFraction(n: number): string {
 export { toFriendlyFraction };
 
 export function scaleIngredient(ingredient: string, multiplier: number): string {
-  console.log('Ingredient:', ingredient);
 
   const cleaned = ingredient.trim().replace(/<[^>]*>/g, '');
   if (multiplier === 1) return cleaned;
-
- console.log('Cleaned:', cleaned);
   
   const match = cleaned.match(LEADING_QTY_RE);
   if (!match) return cleaned;
-  
-  console.log('Match:', match);
   
   const rawQty = match[1].trim();
   const rest = match[2];
@@ -85,8 +80,8 @@ export function scaleIngredient(ingredient: string, multiplier: number): string 
 
   // Scale the second number if rest starts with a range separator (e.g. "3/4 - 1 tsp" or "1 to 2 tsp")
   const rangeRe = new RegExp(
-    `^(\\s*[-\u2013]\\s*|\\s+to\\s+)(\\d+\\s*[${FRACTION_CHARS}]|\\d+\\/\\d+|\\d+\\.\\d+|\\d+|[${FRACTION_CHARS}])(.*)$`
-  );
+  `^(\\s*[-\u2013\u2212]\\s*|\\s+to\\s+)(\\d+\\s*[${FRACTION_CHARS}]|\\d+\\/\\d+|\\d+\\.\\d+|\\d+|[${FRACTION_CHARS}])(.*)$`
+);
   const rangeMatch = rest.match(rangeRe);
   if (rangeMatch) {
     const sep = rangeMatch[1];
