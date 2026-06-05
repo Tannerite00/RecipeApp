@@ -13,7 +13,7 @@ import { PersonalRecipesPage } from './pages/PersonalRecipesPage';
 function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 pb-16 sm:pb-0">
         <Navigation />
         <Routes>
           <Route path="/" element={<RecipeListPage />} />

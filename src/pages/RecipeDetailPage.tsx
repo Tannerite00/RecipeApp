@@ -206,7 +206,7 @@ export function RecipeDetailPage() {
         <div className="bg-white rounded-lg shadow-lg p-5 sm:p-8 mb-6">
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-4 sm:mb-6 break-words">{recipe.title}</h1>
 
-          <div className="mb-6 sm:mb-8 flex items-center gap-3">
+          <div className="mb-6 sm:mb-8 flex items-center gap-3 flex-wrap">
             <button
               onClick={() => setShowMealPlanModal(true)}
               className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg font-medium transition text-sm sm:text-base flex-1 sm:flex-none justify-center"
