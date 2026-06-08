@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Navigation } from './components/Navigation';
 import { RecipeListPage } from './pages/RecipeListPage';
@@ -9,8 +10,16 @@ import { AuthPage } from './pages/AuthPage';
 import { AccountPage } from './pages/AccountPage';
 import { EditRecipePage } from './pages/EditRecipePage';
 import { PersonalRecipesPage } from './pages/PersonalRecipesPage';
+import { SubscriptionPage } from './pages/SubscriptionPage';
+import { initializePurchases } from './lib/purchases';
+import { cacheGet } from './lib/offlineCache';
 
 function App() {
+  useEffect(() => {
+    const cachedUser = cacheGet<{ id: string }>('auth-user');
+    void initializePurchases(cachedUser?.id);
+  }, []);
+
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-gray-50 pb-16 sm:pb-0">
@@ -25,6 +34,7 @@ function App() {
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/account" element={<AccountPage />} />
           <Route path="/edit-recipe/:id" element={<EditRecipePage />} />
+          <Route path="/subscription" element={<SubscriptionPage />} />
         </Routes>
       </div>
     </BrowserRouter>

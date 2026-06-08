@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Mail, Lock, LogOut, Calendar, Check, X, MessageCircle, Trash2, Bug, Send, CheckCircle2, ChefHat, Pencil, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Mail, Lock, LogOut, Calendar, Check, X, MessageCircle, Trash2, Bug, Send, CheckCircle2, ChefHat, Pencil, AlertTriangle, Star } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import type { Recipe } from '../lib/supabase';
@@ -668,6 +668,28 @@ export function AccountPage() {
             {message && <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-2.5">{message}</div>}
             <button type="submit" disabled={updating || !canUpdate} className="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium px-6 py-2.5 sm:py-3 rounded-lg transition text-sm sm:text-base">{updating ? 'Updating...' : 'Update Password'}</button>
           </form>
+        </div>
+
+        {/* Plantiful Premium */}
+        <div className="bg-gradient-to-br from-teal-600 to-emerald-600 rounded-2xl shadow-lg p-5 sm:p-8 mb-6 text-white">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Star className="w-5 h-5 fill-white" />
+                <h2 className="text-lg sm:text-xl font-bold">Plantiful Premium</h2>
+              </div>
+              <p className="text-teal-100 text-sm mb-4">
+                Meal planning, grocery lists, personal recipes, and more — all in one place.
+              </p>
+              <button
+                onClick={() => navigate('/subscription')}
+                className="inline-flex items-center gap-2 bg-white text-teal-700 hover:bg-teal-50 font-semibold px-5 py-2.5 rounded-xl transition text-sm shadow-sm"
+              >
+                <Star className="w-4 h-4 fill-teal-600 text-teal-600" />
+                View Plans
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Sign Out */}
