@@ -26,6 +26,8 @@ to the support team (Me).
 
 There is also a button do delete your account, which results in PERMENANT ERASURE OF ALL YOUR DATA (except recipes you have added to the recipe bank). 
 
+Updates should trigger a notification within the app to update, however old builds will still run.
+
 ## Offline support
 
 The app caches recipes and ratings in your browser the first time they load. If you reopen the app without internet, 
@@ -37,5 +39,7 @@ while offline and update when back online.
 
 Picture capability will be added so usrs can see the finished recipes and what they look like. Will hopefully have community engagement so the photos come from real people making the recipes! 
 
-Payment portal for people to sign up for the app and so it can be displayed on the google and apple app stores.
+Payment portal for people to sign up for the app and so it can be displayed on the google and apple app stores. (this feature has been added, however we sare still beta testing so it is not active.)
+
+
 
