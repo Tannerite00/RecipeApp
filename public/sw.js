@@ -1,4 +1,4 @@
-const CACHE = 'recipehub-shell-v3';
+const CACHE = 'plantiful-shell-v4';
 const SHELL = [
   '/',
   '/index.html',
@@ -9,8 +9,9 @@ const SHELL = [
 ];
 
 self.addEventListener('install', (event) => {
+  // Cache shell assets but do NOT call skipWaiting — stay in waiting state
+  // until the user explicitly approves the update via the in-app banner.
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -20,6 +21,13 @@ self.addEventListener('activate', (event) => {
     )
   );
   self.clients.claim();
+});
+
+// The app posts { type: 'SKIP_WAITING' } when the user clicks "Update".
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('fetch', (event) => {

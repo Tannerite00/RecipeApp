@@ -10,6 +10,7 @@ import { AuthPage } from './pages/AuthPage';
 import { AccountPage } from './pages/AccountPage';
 import { EditRecipePage } from './pages/EditRecipePage';
 import { PersonalRecipesPage } from './pages/PersonalRecipesPage';
+import { UpdateBanner } from './components/UpdateBanner';
 import { SubscriptionPage } from './pages/SubscriptionPage';
 import { initializePurchases } from './lib/purchases';
 import { cacheGet } from './lib/offlineCache';
@@ -24,6 +25,7 @@ function App() {
     <BrowserRouter>
       <div className="min-h-screen bg-gray-50 pb-16 sm:pb-0">
         <Navigation />
+        <UpdateBanner />
         <Routes>
           <Route path="/" element={<RecipeListPage />} />
           <Route path="/recipe/:id" element={<RecipeDetailPage />} />
