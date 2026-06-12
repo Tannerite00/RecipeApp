@@ -1,23 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useRegisterSW } from 'virtual:pwa-register/react';
 import { Download, X } from 'lucide-react';
-import { onUpdateAvailable, applyUpdate } from '../lib/swUpdate';
 
 export function UpdateBanner() {
-  const [visible, setVisible] = useState(false);
-  const [updating, setUpdating] = useState(false);
+  const {
+    needRefresh: [needRefresh, setNeedRefresh],
+    updateServiceWorker,
+  } = useRegisterSW({
+    onRegisteredSW(_, reg) {
+      if (reg) {
+        // Poll for updates every 60 minutes while the tab is open
+        setInterval(() => void reg.update(), 60 * 60 * 1000);
+      }
+    },
+  });
 
-  useEffect(() => {
-    onUpdateAvailable(() => setVisible(true));
-  }, []);
-
-  if (!visible) return null;
-
-  function handleUpdate() {
-    setUpdating(true);
-    applyUpdate();
-    // controllerchange → reload fires in swUpdate.ts; this is a fallback.
-    setTimeout(() => window.location.reload(), 3000);
-  }
+  if (!needRefresh) return null;
 
   return (
     <div
@@ -38,15 +35,14 @@ export function UpdateBanner() {
       </div>
 
       <button
-        onClick={handleUpdate}
-        disabled={updating}
-        className="flex-shrink-0 bg-teal-500 hover:bg-teal-400 disabled:opacity-60 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+        onClick={() => void updateServiceWorker(true)}
+        className="flex-shrink-0 bg-teal-500 hover:bg-teal-400 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
       >
-        {updating ? 'Updating…' : 'Update'}
+        Update
       </button>
 
       <button
-        onClick={() => setVisible(false)}
+        onClick={() => setNeedRefresh(false)}
         className="flex-shrink-0 text-gray-500 hover:text-gray-300 transition-colors p-1 -mr-1"
         aria-label="Dismiss"
       >
