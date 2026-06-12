@@ -205,11 +205,11 @@ export function RecipeDetailPage() {
 
         <div className="bg-white rounded-lg shadow-lg overflow-hidden mb-6">
           {recipe.image_url && (
-            <div className="w-full h-56 sm:h-72 md:h-80 overflow-hidden bg-gray-50">
+            <div className="w-full aspect-video overflow-hidden bg-gray-100">
               <img
                 src={recipe.image_url}
                 alt={recipe.title}
-                className="w-full h-full object-contain"
+                className="w-full h-full object-cover"
               />
             </div>
           )}

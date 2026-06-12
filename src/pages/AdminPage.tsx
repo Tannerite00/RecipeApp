@@ -116,7 +116,8 @@ function UploadModal({ recipe, onClose, onSaved }: UploadModalProps) {
               </div>
               <div className="text-center">
                 <p className="text-sm font-semibold text-gray-800">Drop image here or click to browse</p>
-                <p className="text-xs text-gray-500 mt-1">Any image format — converted to WebP automatically</p>
+                <p className="text-xs text-gray-500 mt-1">Recommended: <span className="font-medium text-gray-700">16:9 ratio — 1280×720px or larger</span></p>
+                <p className="text-xs text-gray-400 mt-0.5">Any format accepted — converted to WebP automatically</p>
               </div>
               <input
                 ref={inputRef}
@@ -206,13 +207,27 @@ export function AdminPage() {
       setLoading(false);
       return;
     }
-    supabase.from('recipes').select('id, title, type, image_url, is_user_recipe')
-      .eq('is_user_recipe', false)
-      .order('title')
-      .then(({ data }) => {
-        setRecipes((data ?? []) as Recipe[]);
-        setLoading(false);
-      });
+    // Paginate to fetch all recipes (Supabase defaults to 1000 per page)
+    async function fetchAll() {
+      let all: Recipe[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data } = await supabase
+          .from('recipes')
+          .select('id, title, type, image_url, is_user_recipe')
+          .eq('is_user_recipe', false)
+          .order('title')
+          .range(from, from + pageSize - 1);
+        if (!data || data.length === 0) break;
+        all = all.concat(data as Recipe[]);
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      setRecipes(all);
+      setLoading(false);
+    }
+    void fetchAll();
   }
 
   const filtered = recipes.filter((r) =>
@@ -337,12 +352,12 @@ function RecipeImageCard({ recipe, removing, confirmingRemove, onUpload, onRemov
   return (
     <div className="bg-white rounded-xl shadow overflow-hidden flex flex-col">
       {/* Image area */}
-      <div className="relative h-40 bg-gray-50 flex items-center justify-center overflow-hidden">
+      <div className="relative w-full aspect-video bg-gray-100 flex items-center justify-center overflow-hidden">
         {hasImage ? (
           <img
             src={recipe.image_url!}
             alt={recipe.title}
-            className="w-full h-full object-contain"
+            className="w-full h-full object-cover"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-teal-100 to-emerald-100">
