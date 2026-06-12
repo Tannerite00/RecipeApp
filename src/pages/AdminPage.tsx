@@ -337,15 +337,17 @@ function RecipeImageCard({ recipe, removing, confirmingRemove, onUpload, onRemov
   return (
     <div className="bg-white rounded-xl shadow overflow-hidden flex flex-col">
       {/* Image area */}
-      <div className="relative h-40 bg-gradient-to-br from-teal-100 to-emerald-100 flex items-center justify-center overflow-hidden">
+      <div className="relative h-40 bg-gray-50 flex items-center justify-center overflow-hidden">
         {hasImage ? (
           <img
             src={recipe.image_url!}
             alt={recipe.title}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-contain"
           />
         ) : (
-          <Leaf className="w-10 h-10 text-teal-300" />
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-teal-100 to-emerald-100">
+            <Leaf className="w-10 h-10 text-teal-300" />
+          </div>
         )}
         {hasImage && (
           <div className="absolute top-2 right-2">

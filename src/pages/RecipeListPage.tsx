@@ -475,16 +475,16 @@ export function RecipeListPage() {
                 }`}
               >
                 {/* Thumbnail */}
-                <div className="relative h-44 overflow-hidden bg-gradient-to-br from-teal-400 to-emerald-500 flex-shrink-0">
+                <div className="relative h-44 overflow-hidden bg-white flex-shrink-0">
                   {recipe.image_url ? (
                     <img
                       src={recipe.image_url}
                       alt={recipe.title}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
                       loading="lazy"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center">
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-teal-400 to-emerald-500">
                       <Leaf className="w-12 h-12 text-white/40" />
                     </div>
                   )}
