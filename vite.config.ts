@@ -16,7 +16,8 @@ export default defineConfig({
         skipWaiting: false, // user must click "Update" in the banner
       },
       devOptions: {
-        enabled: false,
+        enabled: true,
+        type: 'module',
       },
     }),
   ],
