@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, X, ArrowLeft, SlidersHorizontal, Heart, ChevronDown, PlusCircle } from 'lucide-react';
+import { Search, X, ArrowLeft, SlidersHorizontal, Heart, ChevronDown, PlusCircle, Leaf } from 'lucide-react';
 import { type Recipe } from '../lib/supabase';
 import { parseISO8601Duration, formatRecipeType, durationToMinutes } from '../lib/utils';
 import { StarRating } from '../components/StarRating';
@@ -470,41 +470,53 @@ export function RecipeListPage() {
               <div
                 key={recipe.id}
                 onClick={() => handleRecipeClick(recipe)}
-                className={`bg-white rounded-lg shadow hover:shadow-lg transition p-4 sm:p-6 text-left hover:scale-[1.02] transform duration-200 cursor-pointer relative group ${
+                className={`bg-white rounded-xl shadow hover:shadow-lg transition-all duration-200 cursor-pointer overflow-hidden group hover:scale-[1.02] ${
                   pickState ? 'ring-2 ring-transparent hover:ring-blue-400' : ''
                 }`}
               >
-                <button
-                  onClick={(e) => handleToggleFavorite(e, recipe.id)}
-                  className={`absolute top-3 right-3 sm:top-4 sm:right-4 p-1.5 rounded-full transition-all duration-200 ${
-                    favorites.has(recipe.id)
-                      ? 'text-rose-500 bg-rose-50 hover:bg-rose-100'
-                      : 'text-gray-300 bg-white/80 hover:text-rose-400 hover:bg-rose-50 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100'
-                  }`}
-                  aria-label={favorites.has(recipe.id) ? 'Remove from favorites' : 'Add to favorites'}
-                >
-                  <Heart className={`w-5 h-5 ${favorites.has(recipe.id) ? 'fill-rose-500' : ''}`} />
-                </button>
-
-                <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 line-clamp-2 pr-8">{recipe.title}</h3>
-                <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">{formatRecipeType(recipe.type)}</p>
-                <div className="flex flex-wrap gap-3 sm:gap-4 text-xs sm:text-sm text-gray-700 items-center">
-                  <div>
-                    <span className="font-medium">Prep:</span>
-                    <p className="text-gray-600">{parseISO8601Duration(recipe.prep_time)}</p>
-                  </div>
-                  <div>
-                    <span className="font-medium">Cook:</span>
-                    <p className="text-gray-600">{parseISO8601Duration(recipe.cook_time)}</p>
-                  </div>
+                {/* Thumbnail */}
+                <div className="relative h-44 overflow-hidden bg-gradient-to-br from-teal-400 to-emerald-500 flex-shrink-0">
+                  {recipe.image_url ? (
+                    <img
+                      src={recipe.image_url}
+                      alt={recipe.title}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Leaf className="w-12 h-12 text-white/40" />
+                    </div>
+                  )}
+                  <button
+                    onClick={(e) => handleToggleFavorite(e, recipe.id)}
+                    className={`absolute top-2.5 right-2.5 p-2 rounded-full backdrop-blur-sm transition-all duration-200 ${
+                      favorites.has(recipe.id)
+                        ? 'text-rose-500 bg-white/90 hover:bg-white'
+                        : 'text-white/80 bg-black/20 hover:bg-black/30 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100'
+                    }`}
+                    aria-label={favorites.has(recipe.id) ? 'Remove from favorites' : 'Add to favorites'}
+                  >
+                    <Heart className={`w-4 h-4 ${favorites.has(recipe.id) ? 'fill-rose-500' : ''}`} />
+                  </button>
                 </div>
-                <div className="mt-3 pt-3 border-t border-gray-100">
-                  <StarRating
-                    value={ratingStats[recipe.id]?.average ?? 0}
-                    count={ratingStats[recipe.id]?.count ?? 0}
-                    readOnly
-                    size="sm"
-                  />
+
+                {/* Content */}
+                <div className="p-4 sm:p-5">
+                  <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-1 line-clamp-2">{recipe.title}</h3>
+                  <p className="text-xs sm:text-sm text-gray-500 mb-3">{formatRecipeType(recipe.type)}</p>
+                  <div className="flex flex-wrap gap-3 text-xs text-gray-600 mb-3">
+                    <span><span className="font-medium text-gray-700">Prep:</span> {parseISO8601Duration(recipe.prep_time)}</span>
+                    <span><span className="font-medium text-gray-700">Cook:</span> {parseISO8601Duration(recipe.cook_time)}</span>
+                  </div>
+                  <div className="pt-2.5 border-t border-gray-100">
+                    <StarRating
+                      value={ratingStats[recipe.id]?.average ?? 0}
+                      count={ratingStats[recipe.id]?.count ?? 0}
+                      readOnly
+                      size="sm"
+                    />
+                  </div>
                 </div>
               </div>
             ))}

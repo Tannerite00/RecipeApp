@@ -203,7 +203,17 @@ export function RecipeDetailPage() {
           {backText}
         </button>
 
-        <div className="bg-white rounded-lg shadow-lg p-5 sm:p-8 mb-6">
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden mb-6">
+          {recipe.image_url && (
+            <div className="w-full h-56 sm:h-72 md:h-80 overflow-hidden">
+              <img
+                src={recipe.image_url}
+                alt={recipe.title}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          )}
+          <div className="p-5 sm:p-8">
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-4 sm:mb-6 break-words">{recipe.title}</h1>
 
           <div className="mb-6 sm:mb-8 flex items-center gap-3 flex-wrap">
@@ -338,6 +348,7 @@ export function RecipeDetailPage() {
                 </li>
               ))}
             </ol>
+          </div>
           </div>
         </div>
 

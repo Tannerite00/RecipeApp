@@ -12,6 +12,7 @@ import { EditRecipePage } from './pages/EditRecipePage';
 import { PersonalRecipesPage } from './pages/PersonalRecipesPage';
 import { UpdateBanner } from './components/UpdateBanner';
 import { SubscriptionPage } from './pages/SubscriptionPage';
+import { AdminPage } from './pages/AdminPage';
 import { initializePurchases } from './lib/purchases';
 import { cacheGet } from './lib/offlineCache';
 
@@ -37,6 +38,7 @@ function App() {
           <Route path="/account" element={<AccountPage />} />
           <Route path="/edit-recipe/:id" element={<EditRecipePage />} />
           <Route path="/subscription" element={<SubscriptionPage />} />
+          <Route path="/admin" element={<AdminPage />} />
         </Routes>
       </div>
     </BrowserRouter>

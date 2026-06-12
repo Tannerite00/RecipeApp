@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Mail, Lock, LogOut, Calendar, Check, X, MessageCircle, Trash2, Bug, Send, CheckCircle2, ChefHat, Pencil, AlertTriangle, Star } from 'lucide-react';
+import { ArrowLeft, Mail, Lock, LogOut, Calendar, Check, X, MessageCircle, Trash2, Bug, Send, CheckCircle2, ChefHat, Pencil, AlertTriangle, Star, Shield, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { User } from '@supabase/supabase-js';
 import type { Recipe } from '../lib/supabase';
@@ -337,6 +337,9 @@ export function AccountPage() {
   const [signInToast, setSignInToast] = useState(false);
   const [showBugReport, setShowBugReport] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [claimingAdmin, setClaimingAdmin] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
   const [userRatings, setUserRatings] = useState<
     { id: string; rating: number; updated_at: string; recipe: { id: string; title: string; type: string | null } | null }[]
   >([]);
@@ -359,6 +362,10 @@ export function AccountPage() {
         cacheSet('auth-user', data.user);
         setLoading(false);
         loadCachedData(data.user.id);
+
+        // Check admin status
+        supabase.from('admin_users').select('user_id').eq('user_id', data.user.id).maybeSingle()
+          .then(({ data: adminData }) => setIsAdmin(!!adminData));
 
         forceSync().then(() => {
           loadCachedData(data.user!.id);
@@ -438,6 +445,35 @@ export function AccountPage() {
       setError(err.message || 'Failed to update password.');
     } finally {
       setUpdating(false);
+    }
+  }
+
+  async function handleClaimAdmin() {
+    setClaimError(null);
+    setClaimingAdmin(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/claim-admin`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+        }
+      );
+      const body = await res.json();
+      if (!res.ok) {
+        setClaimError(body.error ?? 'Failed to claim admin access.');
+      } else {
+        setIsAdmin(true);
+      }
+    } catch {
+      setClaimError('An unexpected error occurred.');
+    } finally {
+      setClaimingAdmin(false);
     }
   }
 
@@ -669,6 +705,55 @@ export function AccountPage() {
             <button type="submit" disabled={updating || !canUpdate} className="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium px-6 py-2.5 sm:py-3 rounded-lg transition text-sm sm:text-base">{updating ? 'Updating...' : 'Update Password'}</button>
           </form>
         </div>
+
+        {/* Admin Panel */}
+        {isAdmin ? (
+          <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 mb-6 border border-teal-100">
+            <div className="flex items-start gap-3">
+              <div className="bg-teal-100 rounded-lg p-2 flex-shrink-0 mt-0.5">
+                <ShieldCheck className="w-5 h-5 text-teal-700" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">Admin Panel</h2>
+                <p className="text-sm text-gray-600 mb-4">
+                  Upload and manage recipe images, assign or remove photos from any recipe.
+                </p>
+                <button
+                  onClick={() => navigate('/admin')}
+                  className="inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold px-5 py-2.5 rounded-xl transition text-sm"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  Open Admin Panel
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 mb-6">
+            <div className="flex items-start gap-3">
+              <div className="bg-gray-100 rounded-lg p-2 flex-shrink-0 mt-0.5">
+                <Shield className="w-5 h-5 text-gray-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">Administrator Access</h2>
+                <p className="text-sm text-gray-600 mb-4">
+                  Claim admin access to manage recipe images. Only one administrator account is allowed.
+                </p>
+                {claimError && (
+                  <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-3">{claimError}</p>
+                )}
+                <button
+                  onClick={handleClaimAdmin}
+                  disabled={claimingAdmin}
+                  className="inline-flex items-center gap-2 bg-gray-900 hover:bg-gray-800 disabled:opacity-60 text-white font-semibold px-5 py-2.5 rounded-xl transition text-sm"
+                >
+                  <Shield className="w-4 h-4" />
+                  {claimingAdmin ? 'Claiming…' : 'Claim Admin Access'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Plantiful Premium */}
         <div className="bg-gradient-to-br from-teal-600 to-emerald-600 rounded-2xl shadow-lg p-5 sm:p-8 mb-6 text-white">

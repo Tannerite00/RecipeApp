@@ -20,6 +20,7 @@ export interface Recipe {
   user_id: string | null;
   is_user_recipe: boolean;
   submitted_for_review?: boolean;
+  image_url?: string | null;
 }
 
 export interface MealPlan {
