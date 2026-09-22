@@ -41,13 +41,14 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // Use service role to bypass RLS for the admin count check and insert
+  // Use service role to bypass RLS for the admin check and insert
   const serviceClient = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
+  // Check if any admin exists
   const { count, error: countError } = await serviceClient
     .from("admin_users")
     .select("*", { count: "exact", head: true });
@@ -66,11 +67,24 @@ Deno.serve(async (req: Request) => {
     );
   }
 
+  // Atomic insert with conflict guard — prevents race condition where two
+  // users hit the endpoint simultaneously and both pass the count check.
   const { error: insertError } = await serviceClient
     .from("admin_users")
-    .insert({ user_id: user.id });
+    .insert({ user_id: user.id })
+    .select();
 
   if (insertError) {
+    // Unique constraint violation means someone else claimed admin in the
+    // race window — return the "already claimed" message instead of failing.
+    const alreadyClaimed = insertError.code === "23505" ||
+      /duplicate key|unique constraint/i.test(insertError.message);
+    if (alreadyClaimed) {
+      return new Response(
+        JSON.stringify({ error: "Admin access has already been claimed. Contact the existing administrator." }),
+        { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
     return new Response(JSON.stringify({ error: insertError.message }), {
       status: 500,
       headers: { "Content-Type": "application/json", ...corsHeaders },

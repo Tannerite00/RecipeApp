@@ -8,6 +8,7 @@ import { RecipeComments } from '../components/RecipeComments';
 import { currentWeekStart, getOfflineMealPlans } from '../lib/mealPlanWeeks';
 import { cacheGet, cacheSet, enqueueRating, enqueueMealPlanOp, setServingOverride, getServingOverrides, getFavorites, setFavorite, removeFavorite } from '../lib/offlineCache';
 import { markDirty, flushWrites, toggleFavoriteRemote } from '../lib/syncManager';
+import { isSafeImageUrl } from '../lib/imageUtils';
 import { parseServingCount, scaleIngredient, toFriendlyFraction } from '../lib/servingScale';
 
 export function RecipeDetailPage() {
@@ -204,7 +205,7 @@ export function RecipeDetailPage() {
         </button>
 
         <div className="bg-white rounded-lg shadow-lg overflow-hidden mb-6">
-          {recipe.image_url && (
+          {recipe.image_url && isSafeImageUrl(recipe.image_url) && (
             <div className="w-full aspect-video overflow-hidden bg-gray-100">
               <img
                 src={recipe.image_url}

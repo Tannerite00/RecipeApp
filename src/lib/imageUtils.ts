@@ -6,6 +6,40 @@ const MAX_WIDTH = 1200;
 const WEBP_QUALITY = 0.85;
 const BUCKET = 'recipe-images';
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
+export function isSafeImageUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    // Only allow URLs from our Supabase storage
+    return parsed.origin === new URL(SUPABASE_URL).origin;
+  } catch {
+    return false;
+  }
+}
+
+async function canModifyRecipe(recipeId: string): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  // Check if user is admin
+  const { data: adminRecord } = await supabase
+    .from('admin_users')
+    .select('user_id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (adminRecord) return true;
+
+  // Check if user owns the recipe
+  const { data: recipe } = await supabase
+    .from('recipes')
+    .select('user_id')
+    .eq('id', recipeId)
+    .maybeSingle();
+  return recipe?.user_id === user.id;
+}
+
 export async function convertToWebP(file: File): Promise<File> {
   if (file.type === 'image/webp') return file;
 
@@ -50,6 +84,10 @@ function updateRecipeImageInCache(recipeId: string, imageUrl: string | null) {
 }
 
 export async function uploadRecipeImage(recipeId: string, file: File): Promise<string> {
+  if (!(await canModifyRecipe(recipeId))) {
+    throw new Error('You do not have permission to modify this recipe.');
+  }
+
   const webpFile = await convertToWebP(file);
   const path = `${recipeId}.webp`;
 
@@ -73,6 +111,10 @@ export async function uploadRecipeImage(recipeId: string, file: File): Promise<s
 }
 
 export async function removeRecipeImage(recipeId: string): Promise<void> {
+  if (!(await canModifyRecipe(recipeId))) {
+    throw new Error('You do not have permission to modify this recipe.');
+  }
+
   await supabase.storage.from(BUCKET).remove([`${recipeId}.webp`]);
 
   const { error } = await supabase

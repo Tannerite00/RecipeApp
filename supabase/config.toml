@@ -1,0 +1,11 @@
+[functions.claim-admin]
+verify_jwt = true
+
+[functions.delete-account]
+verify_jwt = true
+
+[functions.seed-recipes]
+verify_jwt = true
+
+[functions.send-bug-report]
+verify_jwt = true

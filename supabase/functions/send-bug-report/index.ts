@@ -6,6 +6,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
 };
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -71,11 +80,11 @@ Deno.serve(async (req: Request) => {
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #ea580c;">New Bug Report</h2>
-            <p><strong>From:</strong> ${user.email}</p>
-            <p><strong>User ID:</strong> ${user.id}</p>
+            <p><strong>From:</strong> ${escapeHtml(user.email ?? '')}</p>
+            <p><strong>User ID:</strong> ${escapeHtml(user.id)}</p>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
             <p><strong>Message:</strong></p>
-            <div style="background: #f9fafb; border-left: 4px solid #ea580c; padding: 12px 16px; border-radius: 4px; white-space: pre-wrap;">${message.trim()}</div>
+            <div style="background: #f9fafb; border-left: 4px solid #ea580c; padding: 12px 16px; border-radius: 4px; white-space: pre-wrap;">${escapeHtml(message.trim())}</div>
           </div>
         `,
       }),

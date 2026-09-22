@@ -63,7 +63,7 @@ export function RecipeComments({ recipeId }: Props) {
       tempId,
       userId: currentUserId,
       recipeId,
-      userEmail: currentEmail ?? '',
+      userEmail: usernameFromEmail(currentEmail),
       content,
       createdAt: new Date().toISOString(),
     });
@@ -73,7 +73,7 @@ export function RecipeComments({ recipeId }: Props) {
       id: tempId,
       user_id: currentUserId,
       recipe_id: recipeId,
-      user_email: currentEmail ?? '',
+      user_email: usernameFromEmail(currentEmail),
       content,
       created_at: new Date().toISOString(),
     };
