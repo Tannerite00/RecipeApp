@@ -27,7 +27,6 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // Verify the caller is authenticated
   const userClient = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_ANON_KEY")!,
@@ -41,51 +40,49 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // Use service role to bypass RLS for the admin check and insert
   const serviceClient = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
-  // Check if any admin exists
-  const { count, error: countError } = await serviceClient
-    .from("admin_users")
-    .select("*", { count: "exact", head: true });
-
-  if (countError) {
-    return new Response(JSON.stringify({ error: countError.message }), {
-      status: 500,
-      headers: { "Content-Type": "application/json", ...corsHeaders },
-    });
-  }
-
-  if (count !== null && count > 0) {
-    return new Response(
-      JSON.stringify({ error: "Admin access has already been claimed. Contact the existing administrator." }),
-      { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
-  }
-
-  // Atomic insert with conflict guard — prevents race condition where two
-  // users hit the endpoint simultaneously and both pass the count check.
+  // Atomic claim: attempt the insert directly. A unique constraint on
+  // admin_users.user_id (added by the security hardening migration) ensures
+  // that if this user already claimed admin, the insert fails with a
+  // duplicate-key error — which we handle gracefully.
   const { error: insertError } = await serviceClient
     .from("admin_users")
     .insert({ user_id: user.id })
     .select();
 
   if (insertError) {
-    // Unique constraint violation means someone else claimed admin in the
-    // race window — return the "already claimed" message instead of failing.
-    const alreadyClaimed = insertError.code === "23505" ||
-      /duplicate key|unique constraint/i.test(insertError.message);
-    if (alreadyClaimed) {
+    // Check if this user is already admin (their own duplicate insert)
+    const { data: existingAdmin } = await serviceClient
+      .from("admin_users")
+      .select("user_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (existingAdmin) {
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    // Check if any admin exists at all
+    const { count } = await serviceClient
+      .from("admin_users")
+      .select("*", { count: "exact", head: true });
+
+    if (count !== null && count > 0) {
       return new Response(
         JSON.stringify({ error: "Admin access has already been claimed. Contact the existing administrator." }),
         { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
-    return new Response(JSON.stringify({ error: insertError.message }), {
+
+    return new Response(JSON.stringify({ error: "Server error" }), {
       status: 500,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });

@@ -70,9 +70,21 @@ async function flushRatings(): Promise<void> {
   const queue = readRatingQueue();
   if (queue.length === 0) return;
   try {
+    // Get the authenticated user's ID from the session, not from cached data.
+    // This prevents a user from submitting ratings under another user's ID.
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Overwrite user_id with the session-derived value to prevent spoofing
+    const safeQueue = queue.map((q) => ({
+      ...q,
+      user_id: user.id,
+      updated_at: new Date().toISOString(),
+    }));
+
     const { error } = await supabase
       .from('recipe_ratings')
-      .upsert(queue, { onConflict: 'user_id,recipe_id' });
+      .upsert(safeQueue, { onConflict: 'user_id,recipe_id' });
     if (!error) writeRatingQueue([]);
   } catch {}
 }
@@ -140,19 +152,25 @@ async function flushCommentOps(): Promise<void> {
   if (queue.length === 0) return;
   const remaining = [...queue];
 
+  // Get the authenticated user's ID from the session to prevent spoofing
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
   for (let i = 0; i < remaining.length; i++) {
     const op = remaining[i];
     try {
       if (op.kind === 'add') {
+        // Use session-derived user_id and email, not cached values
         await supabase.from('recipe_comments').insert({
-          user_id: op.userId,
+          user_id: user.id,
           recipe_id: op.recipeId,
-          user_email: op.userEmail,
+          user_email: user.email ?? op.userEmail,
           content: op.content,
         });
       } else {
         if (!op.commentId.startsWith('temp-')) {
-          await supabase.from('recipe_comments').delete().eq('id', op.commentId);
+          // RLS policy will enforce that only the comment owner can delete
+          await supabase.from('recipe_comments').delete().eq('id', op.commentId).eq('user_id', user.id);
         }
       }
       remaining.splice(i, 1);

@@ -6,6 +6,7 @@ import { parseISO8601Duration, formatRecipeType, durationToMinutes } from '../li
 import { StarRating } from '../components/StarRating';
 import { cacheGet, cacheSet, loadBundledRecipes, getFavorites, setFavorite, removeFavorite } from '../lib/offlineCache';
 import { toggleFavoriteRemote } from '../lib/syncManager';
+import { isSafeImageUrl } from '../lib/imageUtils';
 
 interface MealPlanPickState {
   pickRecipeForMealPlan: boolean;
@@ -476,7 +477,7 @@ export function RecipeListPage() {
               >
                 {/* Thumbnail */}
                 <div className="relative w-full aspect-video overflow-hidden flex-shrink-0">
-                  {recipe.image_url ? (
+                  {recipe.image_url && isSafeImageUrl(recipe.image_url) ? (
                     <img
                       src={recipe.image_url}
                       alt={recipe.title}

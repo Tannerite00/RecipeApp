@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ImagePlus, Leaf, Search, Trash2, Upload, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Recipe } from '../lib/supabase';
 import { cacheGet } from '../lib/offlineCache';
-import { convertToWebP, uploadRecipeImage, removeRecipeImage } from '../lib/imageUtils';
+import { convertToWebP, uploadRecipeImage, removeRecipeImage, isSafeImageUrl } from '../lib/imageUtils';
 
 // ---------------------------------------------------------------------------
 // Upload Modal
@@ -353,7 +353,7 @@ function RecipeImageCard({ recipe, removing, confirmingRemove, onUpload, onRemov
     <div className="bg-white rounded-xl shadow overflow-hidden flex flex-col">
       {/* Image area */}
       <div className="relative w-full aspect-video bg-gray-100 flex items-center justify-center overflow-hidden">
-        {hasImage ? (
+        {hasImage && isSafeImageUrl(recipe.image_url) ? (
           <img
             src={recipe.image_url!}
             alt={recipe.title}
