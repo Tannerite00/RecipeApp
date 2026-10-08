@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, X, ArrowLeft, SlidersHorizontal, Heart, ChevronDown, PlusCircle, Leaf } from 'lucide-react';
+import { Search, X, ArrowLeft, SlidersHorizontal, Heart, ChevronDown, PlusCircle, Leaf, Salad } from 'lucide-react';
 import { type Recipe } from '../lib/supabase';
 import { parseISO8601Duration, formatRecipeType, durationToMinutes } from '../lib/utils';
 import { StarRating } from '../components/StarRating';
@@ -17,7 +17,8 @@ interface MealPlanPickState {
 }
 
 const ALLERGENS = [
-  { key: 'milk', label: 'Milk', terms: ['milk', 'cream', 'butter', 'cheese', 'yogurt', 'whey', 'casein', 'lactose', 'ghee'] },
+  { key: 'cheese', label: 'Cheese', terms: ['cheese', 'cheddar', 'mozzarella', 'parmesan', 'feta', 'gouda', 'brie', 'camembert', 'ricotta', 'blue cheese', 'cream cheese', 'cotija', 'pecorino', 'gruyere', 'swiss cheese', 'provolone', 'mascarpone', 'paneer', 'halloumi', 'goat cheese', ' asiago', 'romano', 'fontina', 'emmenthal'] },
+  { key: 'milk', label: 'Milk (dairy)', terms: ['milk', 'cream', 'butter', 'yogurt', 'whey', 'casein', 'lactose', 'ghee'] },
   { key: 'eggs', label: 'Eggs', terms: ['egg', 'eggs', 'meringue', 'mayonnaise'] },
   { key: 'fish', label: 'Fish', terms: ['fish', 'salmon', 'tuna', 'cod', 'tilapia', 'anchovy', 'anchovies', 'sardine', 'sardines', 'trout', 'halibut', 'bass', 'swordfish', 'mahi', 'mackerel', 'snapper'] },
   { key: 'crustaceans', label: 'Crustaceans', terms: ['shrimp', 'crab', 'lobster', 'crawfish', 'crayfish', 'prawn', 'prawns'] },
@@ -37,6 +38,13 @@ const ALLERGENS = [
   { key: 'corn', label: 'Corn', terms: ['corn', 'cornmeal', 'cornstarch', 'corn starch', 'polenta', 'hominy', 'grits', 'maize'] },
   { key: 'garlic', label: 'Garlic', terms: ['garlic'] },
   { key: 'onion', label: 'Onion', terms: ['onion', 'onions', 'shallot', 'shallots', 'scallion', 'scallions', 'leek', 'leeks', 'chive', 'chives'] },
+];
+
+const DIETARY_PRESETS = [
+  { key: 'dairy_free', label: 'Dairy-Free', icon: '🥛', keys: ['cheese', 'milk'] },
+  { key: 'vegan', label: 'Vegan', icon: '🌱', keys: ['milk', 'cheese', 'eggs', 'fish', 'crustaceans', 'mollusks'] },
+  { key: 'vegetarian', label: 'Vegetarian', icon: '🥕', keys: ['fish', 'crustaceans', 'mollusks'] },
+  { key: 'low_fodmap', label: 'Low FODMAP', icon: '🥗', keys: ['milk', 'cheese', 'wheat', 'barley', 'rye', 'oats', 'onion', 'garlic'] },
   { key: 'nightshades', label: 'Nightshades (tomato, potato, eggplant)', terms: ['tomato', 'tomatoes', 'potato', 'potatoes', 'eggplant', 'bell pepper', 'bell peppers', 'paprika', 'cayenne', 'jalape', 'chili pepper', 'chipotle'] },
   { key: 'citrus', label: 'Citrus', terms: ['lemon', 'lime', 'orange', 'grapefruit', 'tangerine', 'clementine', 'mandarin', 'citrus', 'zest'] },
   { key: 'chocolate', label: 'Chocolate (cocoa)', terms: ['chocolate', 'cocoa', 'cacao'] },
@@ -237,6 +245,24 @@ export function RecipeListPage() {
       cacheSet('allergen-filters', Array.from(next));
       return next;
     });
+  }
+
+  function togglePreset(preset: typeof DIETARY_PRESETS[number]) {
+    setSelectedAllergens((prev) => {
+      const next = new Set(prev);
+      const allActive = preset.keys.every((k) => next.has(k));
+      if (allActive) {
+        preset.keys.forEach((k) => next.delete(k));
+      } else {
+        preset.keys.forEach((k) => next.add(k));
+      }
+      cacheSet('allergen-filters', Array.from(next));
+      return next;
+    });
+  }
+
+  function isPresetActive(preset: typeof DIETARY_PRESETS[number]): boolean {
+    return preset.keys.every((k) => selectedAllergens.has(k));
   }
 
   function clearAllFilters() {
@@ -606,6 +632,22 @@ export function RecipeListPage() {
                   isOpen={openSections.allergens}
                   onToggle={() => toggleSection('allergens')}
                 >
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    {DIETARY_PRESETS.map((preset) => (
+                      <button
+                        key={preset.key}
+                        onClick={() => togglePreset(preset)}
+                        className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all border ${
+                          isPresetActive(preset)
+                            ? 'bg-teal-50 border-teal-400 text-teal-700 shadow-sm'
+                            : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100 hover:border-gray-300'
+                        }`}
+                      >
+                        <Salad className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span className="truncate">{preset.label}</span>
+                      </button>
+                    ))}
+                  </div>
                   <p className="text-xs text-gray-500 mb-2">Check allergens to hide recipes containing them.</p>
                   <div className="space-y-0.5 max-h-[30vh] overflow-y-auto">
                     {ALLERGENS.map((allergen) => (
