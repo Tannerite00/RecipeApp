@@ -687,7 +687,7 @@ export function RecipeListPage() {
                     ))}
                   </div>
                   <p className="text-xs text-gray-500 mb-2">Check allergens to hide recipes containing them.</p>
-                  <div className="space-y-0.5 max-h-[30vh] overflow-y-auto">
+                  <div className="space-y-0.5 max-h-[26vh] overflow-y-auto">
                     {ALLERGENS.map((allergen) => (
                       <label
                         key={allergen.key}
