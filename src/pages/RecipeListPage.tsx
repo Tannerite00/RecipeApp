@@ -38,16 +38,16 @@ const ALLERGENS = [
   { key: 'corn', label: 'Corn', terms: ['corn', 'cornmeal', 'cornstarch', 'corn starch', 'polenta', 'hominy', 'grits', 'maize'] },
   { key: 'garlic', label: 'Garlic', terms: ['garlic'] },
   { key: 'onion', label: 'Onion', terms: ['onion', 'onions', 'shallot', 'shallots', 'scallion', 'scallions', 'leek', 'leeks', 'chive', 'chives'] },
-];
-
-const DIETARY_PRESETS = [
-  { key: 'dairy_free', label: 'Dairy-Free', icon: '🥛', keys: ['cheese', 'milk'] },
-  { key: 'vegan', label: 'Vegan', icon: '🌱', keys: ['milk', 'cheese', 'eggs', 'fish', 'crustaceans', 'mollusks'] },
-  { key: 'vegetarian', label: 'Vegetarian', icon: '🥕', keys: ['fish', 'crustaceans', 'mollusks'] },
-  { key: 'low_fodmap', label: 'Low FODMAP', icon: '🥗', keys: ['milk', 'cheese', 'wheat', 'barley', 'rye', 'oats', 'onion', 'garlic'] },
   { key: 'nightshades', label: 'Nightshades (tomato, potato, eggplant)', terms: ['tomato', 'tomatoes', 'potato', 'potatoes', 'eggplant', 'bell pepper', 'bell peppers', 'paprika', 'cayenne', 'jalape', 'chili pepper', 'chipotle'] },
   { key: 'citrus', label: 'Citrus', terms: ['lemon', 'lime', 'orange', 'grapefruit', 'tangerine', 'clementine', 'mandarin', 'citrus', 'zest'] },
   { key: 'chocolate', label: 'Chocolate (cocoa)', terms: ['chocolate', 'cocoa', 'cacao'] },
+];
+
+const DIETARY_PRESETS = [
+  { key: 'dairy_free', label: 'Dairy-Free', keys: ['cheese', 'milk'] },
+  { key: 'vegan', label: 'Vegan', keys: ['milk', 'cheese', 'eggs', 'fish', 'crustaceans', 'mollusks'] },
+  { key: 'vegetarian', label: 'Vegetarian', keys: ['fish', 'crustaceans', 'mollusks'] },
+  { key: 'low_fodmap', label: 'Low FODMAP', keys: ['milk', 'cheese', 'wheat', 'barley', 'rye', 'oats', 'onion', 'garlic'] },
 ];
 
 type SortOption = 'default' | 'alpha_asc' | 'alpha_desc' | 'prep_asc' | 'prep_desc' | 'cook_asc' | 'cook_desc' | 'rating_desc';
