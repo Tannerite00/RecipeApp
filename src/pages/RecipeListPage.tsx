@@ -7,7 +7,7 @@ import { StarRating } from '../components/StarRating';
 import { cacheGet, cacheSet, loadBundledRecipes, getFavorites, setFavorite, removeFavorite } from '../lib/offlineCache';
 import { toggleFavoriteRemote } from '../lib/syncManager';
 import { isSafeImageUrl } from '../lib/imageUtils';
-
+ 
 interface MealPlanPickState {
   pickRecipeForMealPlan: boolean;
   mealPlanId: string;
