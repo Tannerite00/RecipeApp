@@ -115,6 +115,11 @@ export function RecipeListPage() {
     const cached = cacheGet<string[]>('allergen-filters');
     return cached ? new Set(cached) : new Set();
   });
+  const [customAllergens, setCustomAllergens] = useState<string[]>(() => {
+    const cached = cacheGet<string[]>('custom-allergen-filters');
+    return cached ?? [];
+  });
+  const [customAllergenInput, setCustomAllergenInput] = useState('');
   const [sortOption, setSortOption] = useState<SortOption>('default');
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [openSections, setOpenSections] = useState({ types: true, allergens: false, sort: false });
@@ -130,6 +135,7 @@ export function RecipeListPage() {
   const activeFilterCount =
     (selectedType ? 1 : 0) +
     selectedAllergens.size +
+    customAllergens.length +
     (sortOption !== 'default' ? 1 : 0);
 
   useEffect(() => {
@@ -172,10 +178,11 @@ export function RecipeListPage() {
       filtered = filtered.filter((r) => favorites.has(r.id));
     }
 
-    if (selectedAllergens.size > 0) {
+    if (selectedAllergens.size > 0 || customAllergens.length > 0) {
       const activeTerms = ALLERGENS
         .filter((a) => selectedAllergens.has(a.key))
         .flatMap((a) => a.terms);
+      activeTerms.push(...customAllergens.map((t) => t.toLowerCase()));
       filtered = filtered.filter((recipe) => !recipeContainsAllergen(recipe, activeTerms));
     }
 
@@ -235,7 +242,7 @@ export function RecipeListPage() {
     }
 
     setFilteredRecipes(filtered);
-  }, [searchQuery, selectedType, searchMode, recipes, selectedAllergens, sortOption, showFavoritesOnly, favorites, ratingStats]);
+  }, [searchQuery, selectedType, searchMode, recipes, selectedAllergens, customAllergens, sortOption, showFavoritesOnly, favorites, ratingStats]);
 
   function toggleAllergen(key: string) {
     setSelectedAllergens((prev) => {
@@ -265,11 +272,33 @@ export function RecipeListPage() {
     return preset.keys.every((k) => selectedAllergens.has(k));
   }
 
+  function addCustomAllergen() {
+    const term = customAllergenInput.trim().toLowerCase();
+    if (!term) return;
+    setCustomAllergens((prev) => {
+      if (prev.includes(term)) return prev;
+      const next = [...prev, term];
+      cacheSet('custom-allergen-filters', next);
+      return next;
+    });
+    setCustomAllergenInput('');
+  }
+
+  function removeCustomAllergen(term: string) {
+    setCustomAllergens((prev) => {
+      const next = prev.filter((t) => t !== term);
+      cacheSet('custom-allergen-filters', next);
+      return next;
+    });
+  }
+
   function clearAllFilters() {
     setSelectedType('');
     setSelectedAllergens(new Set());
+    setCustomAllergens([]);
     setSortOption('default');
     cacheSet('allergen-filters', []);
+    cacheSet('custom-allergen-filters', []);
   }
 
   function toggleSection(section: keyof typeof openSections) {
@@ -449,6 +478,15 @@ export function RecipeListPage() {
                 >
                   {a.label.split(' (')[0]}
                   <button onClick={() => toggleAllergen(a.key)} className="hover:text-red-900"><X className="w-3 h-3" /></button>
+                </span>
+              ))}
+              {customAllergens.map((term) => (
+                <span
+                  key={`custom-${term}`}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 border border-red-200 text-red-700 rounded-full text-xs font-medium"
+                >
+                  {term}
+                  <button onClick={() => removeCustomAllergen(term)} className="hover:text-red-900"><X className="w-3 h-3" /></button>
                 </span>
               ))}
               {sortOption !== 'default' && (
@@ -664,6 +702,41 @@ export function RecipeListPage() {
                         <span className="text-sm text-gray-800">{allergen.label}</span>
                       </label>
                     ))}
+                  </div>
+
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    <p className="text-xs font-medium text-gray-700 mb-2">Custom ingredient to avoid</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={customAllergenInput}
+                        onChange={(e) => setCustomAllergenInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomAllergen(); } }}
+                        placeholder="e.g. carrot, cilantro..."
+                        className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent"
+                      />
+                      <button
+                        type="button"
+                        onClick={addCustomAllergen}
+                        disabled={!customAllergenInput.trim()}
+                        className="px-3 py-2 text-sm font-medium rounded-lg bg-red-500 text-white hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {customAllergens.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {customAllergens.map((term) => (
+                          <span
+                            key={`modal-custom-${term}`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 border border-red-200 text-red-700 rounded-full text-xs font-medium"
+                          >
+                            {term}
+                            <button onClick={() => removeCustomAllergen(term)} className="hover:text-red-900"><X className="w-3 h-3" /></button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </FilterSection>
 
