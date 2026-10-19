@@ -39,7 +39,7 @@ while offline and update when back online.
 
 ## Coming Soon
 
-Payment portal for people to sign up for the app and so it can be displayed on the google and apple app stores. (this feature has been added, however we sare still beta testing so it is not active.)
+Payment portal for people to sign up for the app and so it can be displayed on the google and apple app stores. (this feature has been added, however we are still beta testing so it is not active.)
 
 
 
