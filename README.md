@@ -1,6 +1,6 @@
 ## Plantiful - The Whole Food Plant Based Vegan Recipe and Meal Plan App
 
-Welcome! Bento is for Vegans, by Vegans. 
+Welcome! Plantiful is for Vegans, by Vegans. 
 
 ## Main Features 
 This app includes over 1600 vegan plant based recipes, with the option to add your own! 
